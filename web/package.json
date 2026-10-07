@@ -1,0 +1,13 @@
+{
+  "name": "qq-auto-bot-web",
+  "private": true,
+  "description": "网页数据统计前端静态资源（仅用于 ESLint 检查）",
+  "scripts": {
+    "lint": "eslint static"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
+  }
+}

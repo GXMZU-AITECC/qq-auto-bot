@@ -121,7 +121,7 @@ AutoReply 插件已内置在 `plugins/` 中，数据文件在 `conf/auto_reply/`
 ```json
 {
   "你好": {
-    "gid": 713489765,
+    "gid": 123456789,
     "vss": [
       { "data": "你好呀", "state": 0, "weight": 1 },
       { "data": "哈喽~", "state": 0, "weight": 2 }
@@ -144,7 +144,7 @@ AutoReply 插件已内置在 `plugins/` 中，数据文件在 `conf/auto_reply/`
 {
   "cron": "0 30 7 * * 1-5",
   "data": "大家早上好",
-  "group": 713489765
+  "group": 123456789
 }
 ```
 
@@ -156,10 +156,10 @@ cron 格式：`秒 分 时 日 月 周`，上面例子表示工作日 7:30 发�
 
 ```json
 // 关闭：在对象里加一个 "enable": false
-{ "cron": "0 30 7 * * 1-5", "data": "大家早上好", "group": 713489765, "enable": false }
+{ "cron": "0 30 7 * * 1-5", "data": "大家早上好", "group": 123456789, "enable": false }
 
 // 开启：把 "enable" 删掉或设为 true
-{ "cron": "0 30 7 * * 1-5", "data": "大家早上好", "group": 713489765, "enable": true }
+{ "cron": "0 30 7 * * 1-5", "data": "大家早上好", "group": 123456789, "enable": true }
 
 // 彻底删除：直接移除这条
 ```
@@ -171,7 +171,7 @@ cron 格式：`秒 分 时 日 月 周`，上面例子表示工作日 7:30 发�
 ```json
 {
   "dataPath": "conf/auto_reply",
-  "host": 1014240658,
+  "host": 10001,
   "follows": []
 }
 ```

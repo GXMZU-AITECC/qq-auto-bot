@@ -21,6 +21,8 @@ config.yaml         ← 全局配置
 configs/            ← 各功能配置文件
 features/           ← 各功能代码
   checkin/          ← 签到功能
+web/                ← 网页数据统计（FastAPI 后端 + 前端页面）
+tests/              ← 单元测试（pytest）
 main.py             ← 启动入口（没有特殊需求不要改）
 bot.py              ← LLOneBot 连接（不要改）
 config.py           ← 配置读取工具（不要改）
@@ -63,9 +65,9 @@ COMMANDS = {
 }
 
 # 想用"模糊匹配"触发（正则），再导出 COMMAND_PATTERNS：
-# 群友发"文综楼已到"、"博达楼已到"这类 "XX楼已到" 都会触发
+# 群友发"文综楼已到"、"博达楼已到+2"这类都会触发
 COMMAND_PATTERNS = {
-    r"^[\u4e00-\u9fa5]+楼已到$": cmd_hello,  # 键是正则，消息全匹配才触发
+    r"^[\u4e00-\u9fa5]+楼已到(?:\+\d{1,2})?$": cmd_hello,  # 键是正则，消息全匹配才触发
 }
 ```
 
@@ -138,9 +140,14 @@ save(d)          # 存回去
 
 ```bash
 python main.py                       # 启动
+ruff check .                         # Python 静态检查
+pytest -q                            # Python 单元测试
+npm --prefix web run lint            # 前端 JS 检查
 # 查看已注册的命令（精确 + 正则）
 python -c "from features import discover, _commands, _patterns; discover(); print(list(_commands), [p.pattern for p, _ in _patterns])"
 ```
+
+> 检查工具需先装开发依赖：`pip install -r requirements-dev.txt`、`npm ci --prefix web`。
 
 ---
 
