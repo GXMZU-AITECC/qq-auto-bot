@@ -39,7 +39,7 @@ async def 函数名(bot, group_id: str, user_id: str, text: str) -> str | None:
 发送群消息。
 
 ```python
-await bot.send_group_msg("243220775", "你好")
+await bot.send_group_msg("123456789", "你好")
 ```
 
 ### `bot.get_group_member_name(group_id, user_id)`
@@ -47,7 +47,7 @@ await bot.send_group_msg("243220775", "你好")
 获取群成员昵称（优先群名片，其次 QQ 昵称）。
 
 ```python
-name = await bot.get_group_member_name("243220775", "3188074406")
+name = await bot.get_group_member_name("123456789", "10001")
 # → "张三"
 ```
 

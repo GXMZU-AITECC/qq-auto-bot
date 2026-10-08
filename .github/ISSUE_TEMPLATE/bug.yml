@@ -1,0 +1,34 @@
+name: 问题报告
+description: 报告一个 bug 或异常
+title: "[问题] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请按「现象 / 复现 / 期望」三段填写，缺少复现步骤的报告会被退回。
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 现象
+      description: 你看到的问题，有报错请直接贴原文
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现
+      description: 从零到出问题的一步步操作
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望
+      description: 正常应该是什么结果
+    validations:
+      required: true

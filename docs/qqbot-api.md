@@ -10,7 +10,7 @@
 
 ```python
 await bot._api_call("send_group_msg", {
-    "group_id": 243220775,
+    "group_id": 123456789,
     "message": "你好"
 })
 ```
@@ -19,7 +19,7 @@ await bot._api_call("send_group_msg", {
 
 ```python
 await bot._api_call("send_private_msg", {
-    "user_id": 3188074406,
+    "user_id": 10001,
     "message": "你好"
 })
 ```
@@ -28,7 +28,7 @@ await bot._api_call("send_private_msg", {
 
 ```python
 await bot._api_call("send_group_forward_msg", {
-    "group_id": 243220775,
+    "group_id": 123456789,
     "messages": [...]     # 消息节点列表
 })
 ```
@@ -41,8 +41,8 @@ await bot._api_call("send_group_forward_msg", {
 
 ```python
 await bot._api_call("get_group_member_info", {
-    "group_id": 243220775,
-    "user_id": 3188074406,
+    "group_id": 123456789,
+    "user_id": 10001,
 })
 # → { nickname: "昵称", card: "群名片", role: "member", ... }
 ```
@@ -51,7 +51,7 @@ await bot._api_call("get_group_member_info", {
 
 ```python
 await bot._api_call("get_group_member_list", {
-    "group_id": 243220775
+    "group_id": 123456789
 })
 # → [{ user_id, nickname, card, role }, ...]
 ```
@@ -60,7 +60,7 @@ await bot._api_call("get_group_member_list", {
 
 ```python
 await bot._api_call("get_group_info", {
-    "group_id": 243220775
+    "group_id": 123456789
 })
 # → { group_id, group_name, member_count, ... }
 ```
@@ -76,7 +76,7 @@ await bot._api_call("get_group_list", {})
 
 ```python
 await bot._api_call("get_stranger_info", {
-    "user_id": 3188074406
+    "user_id": 10001
 })
 # → { user_id, nickname, sex, age }
 ```
@@ -89,8 +89,8 @@ await bot._api_call("get_stranger_info", {
 
 ```python
 await bot._api_call("set_group_card", {
-    "group_id": 243220775,
-    "user_id": 3188074406,
+    "group_id": 123456789,
+    "user_id": 10001,
     "card": "新名片"         # 空字符串可清空名片
 })
 ```
@@ -100,8 +100,8 @@ await bot._api_call("set_group_card", {
 ```python
 # duration 单位秒，0 表示解除禁言
 await bot._api_call("set_group_ban", {
-    "group_id": 243220775,
-    "user_id": 3188074406,
+    "group_id": 123456789,
+    "user_id": 10001,
     "duration": 600          # 10分钟
 })
 ```
@@ -110,7 +110,7 @@ await bot._api_call("set_group_ban", {
 
 ```python
 await bot._api_call("set_group_whole_ban", {
-    "group_id": 243220775,
+    "group_id": 123456789,
     "enable": True
 })
 ```
@@ -119,8 +119,8 @@ await bot._api_call("set_group_whole_ban", {
 
 ```python
 await bot._api_call("set_group_admin", {
-    "group_id": 243220775,
-    "user_id": 3188074406,
+    "group_id": 123456789,
+    "user_id": 10001,
     "enable": True
 })
 ```
@@ -133,7 +133,7 @@ await bot._api_call("set_group_admin", {
 
 ```python
 await bot._api_call("send_group_msg", {
-    "group_id": 243220775,
+    "group_id": 123456789,
     "message": [
         {"type": "text", "data": {"text": "看这张图："}},
         {"type": "image", "data": {"file": "http://..."}},
