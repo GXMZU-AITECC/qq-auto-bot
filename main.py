@@ -45,16 +45,6 @@ async def on_message(bot: OneBotClient, group_id: str, user_id: str, text: str):
         await bot.send_group_msg(group_id, reply)
 
 
-async def _start_web():
-    """启动网页数据统计服务（config.yaml 中 web.enabled=true 时启用）"""
-    from web.server import start
-
-    await start(
-        get("web", "host", default="127.0.0.1"),
-        get("web", "port", default=8000),
-    )
-
-
 async def main():
     discover()
     logger.info("启动 QQ 机器人...")
@@ -64,23 +54,12 @@ async def main():
         on_message=on_message,
     )
 
-    web_task = None
-    if get("web", "enabled", default=False):
-        logger.info(f"启动网页数据统计: http://{get('web', 'host', default='127.0.0.1')}:{get('web', 'port', default=8000)}")
-        web_task = asyncio.create_task(_start_web())
-
     try:
         await client.start()
     except KeyboardInterrupt:
         logger.info("收到退出信号")
     finally:
         await client.stop()
-        if web_task:
-            web_task.cancel()
-            try:
-                await web_task
-            except asyncio.CancelledError:
-                pass
         logger.info("机器人已停止")
 
 

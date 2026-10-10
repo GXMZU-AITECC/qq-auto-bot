@@ -20,8 +20,7 @@ python main.py
 config.yaml         ← 全局配置
 configs/            ← 各功能配置文件
 features/           ← 各功能代码
-  checkin/          ← 签到功能
-web/                ← 网页数据统计（FastAPI 后端 + 前端页面）
+  demo/             ← 范例功能
 tests/              ← 单元测试（pytest）
 main.py             ← 启动入口（没有特殊需求不要改）
 bot.py              ← LLOneBot 连接（不要改）
@@ -55,14 +54,15 @@ from config import load_feature_config
 async def cmd_hello(bot, group_id, user_id, text):
     return "你好！"         # 返回字符串 = 机器人自动发到群里
 
-async def cmd_help(bot, group_id, user_id, text):
-    return "可用命令：/hello、/help"
+async def cmd_ping(bot, group_id, user_id, text):
+    return "pong"
 
 # ★ 必须导出 COMMANDS，机器人才能发现你的命令
 COMMANDS = {
     "/hello": cmd_hello,   # 群友发 /hello → 执行 cmd_hello
-    "/help":  cmd_help,
+    "/ping":  cmd_ping,
 }
+# 注：/help 是框架内置命令，自动列出所有命令，不用自己写，也不能被覆盖
 
 # 想用"模糊匹配"触发（正则），再导出 COMMAND_PATTERNS：
 # 群友发"文综楼已到"、"博达楼已到+2"这类都会触发
@@ -97,7 +97,7 @@ my_key = cfg.get("my_key")               # 取值，没有则返回 None
 | 文件 | 用途 |
 |------|------|
 | `config.yaml` | 全局配置，改 LLOneBot 地址、日志等级等 |
-| `configs/checkin.yaml` | 签到功能的时段和时长 |
+| `configs/demo.yaml` | 范例功能的开关 |
 
 ---
 
@@ -142,12 +142,11 @@ save(d)          # 存回去
 python main.py                       # 启动
 ruff check .                         # Python 静态检查
 pytest -q                            # Python 单元测试
-npm --prefix web run lint            # 前端 JS 检查
 # 查看已注册的命令（精确 + 正则）
 python -c "from features import discover, _commands, _patterns; discover(); print(list(_commands), [p.pattern for p, _ in _patterns])"
 ```
 
-> 检查工具需先装开发依赖：`pip install -r requirements-dev.txt`、`npm ci --prefix web`。
+> 检查工具需先装开发依赖：`pip install -r requirements-dev.txt`。
 
 ---
 

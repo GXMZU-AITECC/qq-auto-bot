@@ -1,119 +1,111 @@
-# 🤖 qq-auto-bot
+# 🤖 qq-auto-bot · sandbox（自由实验分支）
 
-实验室群聊智能回复机器人二次开发项目，基于 LLOneBot (OneBot v11) + Python，支持功能模块自动发现，开箱即用。
+本分支是 qq-auto-bot 的**常驻实验分支**：一套现成的 QQ 机器人框架（LLOneBot + Python），
+想做什么功能就做什么功能，**尽情玩，不影响生产**。
 
-## 📌 项目简介
+- 生产代码在 `main` / `develop`，本分支**永不合并回去**。
+- 这里只有「基础 API」（连 QQ、收发消息、功能自动发现），**不含任何业务功能**。
+- 玩成熟的好点子，再另提 PR 搬进生产。
 
-本项目是面向实验室群聊的 QQ 机器人，内嵌自动回复与签到等实用功能。整体架构为「后端 LLOneBot 负责连接 QQ → Python 负责业务逻辑」，功能以子包形式组织在 `features/` 下，启动时自动发现，新增功能无需改动 `main.py`。
+## 一、获取代码
 
-## 💻 设备依赖
+本仓库的默认分支不是 `sandbox`，clone 后要切过去：
 
-- **操作系统**：Windows（另需能运行 LLOneBot 的环境）
-- **Python**：3.10+（使用 `X | Y` 类型标注）
-- **LLOneBot**：负责连接 QQ 并提供 OneBot v11 协议，默认开启端口 3000（HTTP API）与 3001（WebSocket）
-- **Java 11+**：仅当使用 Overflow (Mirai) 后端时需要，详见 [`docs/mirai-deploy.md`](docs/mirai-deploy.md)
-- **Python 依赖**：见 `requirements.txt`
+```bash
+git clone https://github.com/GXMZU-AITECC/qq-auto-bot.git
+cd qq-auto-bot
+git switch sandbox
+```
 
-| 依赖 | 用途 |
-|------|------|
-| websockets | 连接 LLOneBot 的 WebSocket |
-| httpx | 调用 LLOneBot HTTP API |
-| pyyaml | 读取 `config.yaml` / `configs/*.yaml` |
-| fastapi / uvicorn | 网页数据统计服务 |
-| openpyxl | 导出 Excel |
+已经 clone 过、只是没有这条分支的话：
 
-## ⚙️ 环境配置
+```bash
+git fetch origin
+git switch sandbox
+```
 
-1. 安装 Python 依赖：
+## 二、框架已经帮你做好这些
+
+你只管写自己的功能，其余框架都包了：
+
+- 连接 QQ（LLOneBot，OneBot v11）
+- 收群消息、发群消息 / 私聊
+- 按命令路由到你的处理函数（精确匹配 + 正则匹配）
+- **内置 `/help`**：群里发 `/help` 自动列出所有已注册的命令
+- 读 YAML 配置
+- **功能自动发现**：功能丢进 `features/` 就生效，不用改 `main.py`
+
+## 三、运行环境（不用你操心）
+
+连接 QQ、登录 QQ、启动机器人进程都由**维护者统一负责**，你不需要自己启动。
+
+你只管写 `features/` 下的功能代码即可；想本地自测时，装好 Python 依赖（Python 3.10+）：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. 编辑 `config.yaml`，填写 LLOneBot 的连接地址等全局配置：
+## 四、3 步加第一个功能
 
-```yaml
-llonebot:
-  ws_url: ws://127.0.0.1:3001
-  http_url: http://127.0.0.1:3000
+完整教程见 [`docs/development.md`](docs/development.md)，现成范例见 `features/demo/`。速览：
+
+1. 建目录 `features/myfeature/`
+2. 写 `features/myfeature/handler.py`，导出 `COMMANDS`：
+
+   ```python
+   async def cmd_hello(bot, group_id, user_id, text):
+       return "你好！"          # 返回字符串 = 机器人自动发到群里
+
+   COMMANDS = {"/hello": cmd_hello}
+   ```
+
+3. 合并生效后，群里发 `/hello` 即会收到回复。
+
+> 更多 API（发消息、取昵称、读配置）见 [`docs/api.md`](docs/api.md)。
+
+## 五、怎么提交代码
+
+1. 从 `sandbox` 拉你自己的分支：
+
+   ```bash
+   git fetch origin
+   git switch -c feature/myfeature origin/sandbox
+   ```
+
+2. 写功能，只改 `features/` 和 `configs/`，**别动基础 API**（`main.py` / `bot.py` / `config.py` / `features/__init__.py`）。
+3. 提交并推送：
+
+   ```bash
+   git add features/myfeature configs/myfeature.yaml
+   git commit -m "feat: 我的新功能"
+   git push -u origin feature/myfeature
+   ```
+
+4. 在 GitHub 上向 `sandbox` 提 PR，CI 通过即可合并。
+
+详见 [`docs/sandbox.md`](docs/sandbox.md)。
+
+## 六、目录结构
+
+```
+config.yaml          ← 全局配置
+configs/             ← 各功能配置
+features/            ← 你的功能都放这（自动发现）
+  demo/              ← 范例功能
+docs/                ← 文档
+tests/               ← 单元测试
+main.py              ← 启动入口（别改）
+bot.py               ← 连 QQ（别改）
+config.py            ← 读配置（别改）
 ```
 
-3. 各功能的独立配置放在 `configs/` 下（如 `configs/checkin.yaml` 定义班次），改动后无需重启。
+## 七、文档
 
-### 开发依赖
+- [`docs/sandbox.md`](docs/sandbox.md) — 本分支的定位、玩法与约定
+- [`docs/development.md`](docs/development.md) — 新手入门：3 步加新功能
+- [`docs/api.md`](docs/api.md) — 框架 API 速查
+- [`docs/qqbot-api.md`](docs/qqbot-api.md) — QQ 机器人 API 速查
 
-开发 / 提交代码前需装检查工具（运行时不需要）：
-
-```bash
-pip install -r requirements-dev.txt   # pytest、ruff
-npm ci --prefix web                    # eslint
-```
-
-自查（与 CI 一致）：
-
-```bash
-ruff check .              # Python 静态检查
-pytest -q                 # Python 单元测试
-npm --prefix web run lint # 前端 JS 检查
-```
-
-## 🚀 使用方法
-
-### 1. 启动后端（LLOneBot）
-
-双击 `LLOneBot-win-x64-ffmpeg/llonebot.exe`，登录 QQ。
-
-### 2. 启动机器人
-
-```bash
-python main.py
-```
-
-或双击根目录的 `start.bat`。
-
-### 项目结构
-
-```
-config.yaml          ← 全局配置（含 web 网页服务配置）
-configs/             ← 各功能独立配置
-features/            ← 功能代码（自动发现，加新功能无需改 main.py）
-web/                 ← 网页数据统计（FastAPI 后端 + 前端页面 + ESLint 配置）
-docs/                ← 开发文档
-tests/               ← 单元测试（pytest）
-.github/             ← Issue/PR 模板、CI 工作流
-pyproject.toml       ← ruff / pytest 配置
-requirements.txt     ← 运行依赖
-requirements-dev.txt ← 开发依赖（pytest、ruff）
-```
-
-### 已有功能
-
-- [**签到**](docs/checkin.md) — 到岗发 `XX楼已到` 当场结算时长，每人每班次每天限一次；晚班带 `+2`/`+3` 自选时长
-- **数据统计** — 网页查看所有数据表，支持分页浏览、按字段分组汇总、勾选字段导出 Excel（默认关闭）
-- **Demo** — 功能开发示例（默认禁用，配置开启后输入 `/烤肠` 触发）
-
-### 网页数据统计
-
-默认关闭。启用方法：将 `config.yaml` 中 `web.enabled` 改为 `true` 后启动机器人，访问 `http://127.0.0.1:8000`。
-
-- 左侧选择数据库和表查看数据，表格区域内部滚动，支持分页
-- **数据** 模式：查看原始数据，表头可勾选字段，点击「导出 Excel」下载所选列
-- **统计** 模式：选择「分组字段 + 汇总字段」自动汇总（如按 `user_id` 分组求和 `duration` 得到每人总时长），也可导出 Excel
-- 只监听 `127.0.0.1`，仅本机可访问；库名/表名/字段名均做白名单校验
-
-### 开发文档
-
-详见 `docs/` 目录：
-
-- [`development.md`](docs/development.md) — 新手入门，3 步加新功能
-- [`api.md`](docs/api.md) — 框架 API 速查
-- [`qqbot-api.md`](docs/qqbot-api.md) — QQ 机器人 API 速查
-- [`mirai-deploy.md`](docs/mirai-deploy.md) — Overflow (Mirai) 部署与 AutoReply 自动回复教程
-
-## 👥 维护团队
-
-本项目由 **GXMZU-AITECC / qq-auto-bot** 团队维护，负责人及评审请求见 `.github/CODEOWNERS`。
-
-## 📄 许可证
+## 许可证
 
 本项目采用 [MIT 许可证](LICENSE)。

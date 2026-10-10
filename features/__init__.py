@@ -8,6 +8,9 @@
 - COMMAND_PATTERNS = {r"^关键词.+$": async_handler, ...}
 - handler 签名: async def handler(bot, group_id, user_id, text) -> str | None
   text 是原始消息全文（用不到可以忽略），返回字符串则自动发送，返回 None 则静默
+
+内置命令:
+- /help 列出所有已注册的命令（精确命令 + 正则命令），无需自己实现，且不可被功能覆盖。
 """
 
 import importlib
@@ -20,6 +23,16 @@ logger = logging.getLogger("features")
 
 _commands: dict[str, Callable] = {}
 _patterns: list[tuple[re.Pattern, Callable]] = []
+
+HELP_CMD = "/help"  # 内置命令，保留名，功能不可覆盖
+
+
+def _help_text() -> str:
+    """汇总所有已注册命令，供内置 /help 使用"""
+    lines = ["📖 可用命令：", f"  {HELP_CMD}  —— 显示本列表"]
+    lines += [f"  {cmd}" for cmd in sorted(_commands)]
+    lines += [f"  {p.pattern}  ——（正则匹配）" for p, _ in _patterns]
+    return "\n".join(lines)
 
 
 def discover():
@@ -34,6 +47,9 @@ def discover():
         try:
             mod = importlib.import_module(f"features.{name}.handler")
             for cmd, handler in getattr(mod, "COMMANDS", {}).items():
+                if cmd == HELP_CMD:
+                    logger.warning(f"features/{name} 注册了保留命令 {HELP_CMD}，已忽略")
+                    continue
                 if cmd in _commands:
                     logger.warning(f"命令 {cmd} 被多个功能注册，后面的覆盖前面的")
                 _commands[cmd] = handler
@@ -61,7 +77,10 @@ async def _run(handler: Callable, bot, group_id: str, user_id: str, src: str) ->
 
 
 async def dispatch(bot, group_id: str, user_id: str, text: str) -> str | None:
-    """路由消息：先精确匹配，再按注册顺序尝试正则全匹配"""
+    """路由消息：内置命令 → 精确匹配 → 按注册顺序尝试正则全匹配"""
+    if text == HELP_CMD:
+        return _help_text()
+
     handler = _commands.get(text)
     if handler is not None:
         return await _run(handler, bot, group_id, user_id, text)

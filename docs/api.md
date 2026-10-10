@@ -79,8 +79,8 @@ file = get("data", "file", default="data.db")      # 取不到时返回默认值
 
 ```python
 from config import load_feature_config
-cfg = load_feature_config("checkin")
-shifts = cfg.get("checkin_shifts", [])
+cfg = load_feature_config("demo")       # 读 configs/demo.yaml
+enabled = cfg.get("enabled", False)     # 取值，没有则返回默认
 ```
 
 找不到配置文件时返回空字典 `{}`，不会报错。
@@ -95,4 +95,8 @@ shifts = cfg.get("checkin_shifts", [])
 
 ### `dispatch(bot, group_id, user_id, text)`
 
-路由消息到对应的命令处理器。先精确匹配 `COMMANDS`，再按注册顺序依次尝试 `COMMAND_PATTERNS` 的正则全匹配，都找不到返回 `None`。
+路由消息到对应的命令处理器。先处理内置命令 `/help`（列出所有已注册命令），再精确匹配 `COMMANDS`，最后按注册顺序依次尝试 `COMMAND_PATTERNS` 的正则全匹配，都找不到返回 `None`。
+
+### 内置命令 `/help`
+
+框架自带 `/help`，群里发 `/help` 即返回所有已注册的精确命令与正则命令；无需自己实现，且不能被功能注册覆盖。

@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [sandbox]
   push:
-    branches: [develop]
+    branches: [sandbox]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -50,25 +50,6 @@ jobs:
             echo "status=failed" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: 安装 Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: 安装前端依赖
-        run: npm ci --prefix web
-      - name: 前端检查 (eslint)
-        id: eslint
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          if npm --prefix web run lint 2>&1 | tee eslint.log; then
-            echo "status=passed" >> "$GITHUB_OUTPUT"
-          else
-            echo "status=failed" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: 把报告贴回 PR
         if: always() && github.event_name == 'pull_request'
         env:
@@ -76,7 +57,6 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           RUFF: ${{ steps.ruff.outputs.status }}
           PYTEST: ${{ steps.pytest.outputs.status }}
-          ESLINT: ${{ steps.eslint.outputs.status }}
         run: |
           MARKER="<!-- ci-report -->"
           {
@@ -87,9 +67,8 @@ jobs:
             echo ""
             [ "$RUFF" = passed ]   && echo "- ✅ 静态检查 (ruff)"   || echo "- ❌ 静态检查 (ruff)"
             [ "$PYTEST" = passed ] && echo "- ✅ 单元测试 (pytest)" || echo "- ❌ 单元测试 (pytest)"
-            [ "$ESLINT" = passed ] && echo "- ✅ 前端检查 (eslint)" || echo "- ❌ 前端检查 (eslint)"
             echo ""
-            for pair in "ruff:$RUFF" "pytest:$PYTEST" "eslint:$ESLINT"; do
+            for pair in "ruff:$RUFF" "pytest:$PYTEST"; do
               name="${pair%%:*}"; status="${pair##*:}"
               if [ "$status" != "passed" ]; then
                 echo "<details><summary>❌ $name 失败详情</summary>"
@@ -118,8 +97,7 @@ jobs:
         if: always()
         run: |
           if [ "${{ steps.ruff.outputs.status }}" != "passed" ] \
-            || [ "${{ steps.pytest.outputs.status }}" != "passed" ] \
-            || [ "${{ steps.eslint.outputs.status }}" != "passed" ]; then
+            || [ "${{ steps.pytest.outputs.status }}" != "passed" ]; then
             echo "CI 有检查未通过"
             exit 1
           fi

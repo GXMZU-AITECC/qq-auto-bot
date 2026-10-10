@@ -9,6 +9,9 @@ __pycache__/
 data/
 logs/
 
+# 本地配置(不入库)
+configs/*.local.yaml
+
 # Node
 node_modules/
 
