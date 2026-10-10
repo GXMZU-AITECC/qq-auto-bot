@@ -21,6 +21,7 @@
 | pyyaml | 读取 `config.yaml` / `configs/*.yaml` |
 | fastapi / uvicorn | 网页数据统计服务 |
 | openpyxl | 导出 Excel |
+| croniter | 定时消息的 cron 解析 |
 
 ## ⚙️ 环境配置
 
@@ -39,6 +40,7 @@ llonebot:
 ```
 
 3. 各功能的独立配置放在 `configs/` 下（如 `configs/checkin.yaml` 定义班次），改动后无需重启。
+   不想把真实配置入库时，复制成 `configs/<名>.local.yaml` 填值——它已 `.gitignore` 且会被优先加载。
 
 ### 开发依赖
 
@@ -89,6 +91,7 @@ requirements-dev.txt ← 开发依赖（pytest、ruff）
 ### 已有功能
 
 - [**签到**](docs/checkin.md) — 到岗发 `XX楼已到` 当场结算时长，每人每班次每天限一次；晚班带 `+2`/`+3` 自选时长
+- [**定时消息**](docs/scheduled.md) — 按 cron 定时发群聊/私聊，支持按节假日日历判断工作日（含调休）
 - **数据统计** — 网页查看所有数据表，支持分页浏览、按字段分组汇总、勾选字段导出 Excel（默认关闭）
 - **Demo** — 功能开发示例（默认禁用，配置开启后输入 `/烤肠` 触发）
 
@@ -107,6 +110,7 @@ requirements-dev.txt ← 开发依赖（pytest、ruff）
 
 - [`development.md`](docs/development.md) — 新手入门，3 步加新功能
 - [`api.md`](docs/api.md) — 框架 API 速查
+- [`scheduled.md`](docs/scheduled.md) — 定时消息功能配置与语义
 - [`qqbot-api.md`](docs/qqbot-api.md) — QQ 机器人 API 速查
 - [`mirai-deploy.md`](docs/mirai-deploy.md) — Overflow (Mirai) 部署与 AutoReply 自动回复教程
 

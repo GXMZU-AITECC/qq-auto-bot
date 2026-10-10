@@ -8,6 +8,8 @@
 - COMMAND_PATTERNS = {r"^关键词.+$": async_handler, ...}
 - handler 签名: async def handler(bot, group_id, user_id, text) -> str | None
   text 是原始消息全文（用不到可以忽略），返回字符串则自动发送，返回 None 则静默
+- 可选导出 STARTUP 列表（长驻后台协程，非消息驱动）: [async def fn(bot), ...]
+  由 main.py 在启动时 create_task，退出时 cancel
 """
 
 import importlib
@@ -20,13 +22,15 @@ logger = logging.getLogger("features")
 
 _commands: dict[str, Callable] = {}
 _patterns: list[tuple[re.Pattern, Callable]] = []
+_startups: list[Callable] = []
 
 
 def discover():
     """扫描 features/ 下所有模块，收集 COMMANDS 与 COMMAND_PATTERNS"""
-    global _commands, _patterns
+    global _commands, _patterns, _startups
     _commands.clear()
     _patterns.clear()
+    _startups.clear()
 
     for finder, name, ispkg in pkgutil.iter_modules(__path__):
         if not ispkg:
@@ -46,6 +50,9 @@ def discover():
                     continue
                 _patterns.append((compiled, handler))
                 logger.info(f"注册正则命令 [{pat}] ← features/{name}")
+            for startup in getattr(mod, "STARTUP", []):
+                _startups.append(startup)
+                logger.info(f"注册启动任务 ← features/{name}")
         except Exception as e:
             logger.error(f"加载 features/{name} 失败: {e}")
 
@@ -71,3 +78,8 @@ async def dispatch(bot, group_id: str, user_id: str, text: str) -> str | None:
             return await _run(handler, bot, group_id, user_id, text)
 
     return None  # 没有匹配的命令，静默
+
+
+def startups() -> list[Callable]:
+    """返回各功能注册的启动协程（签名 async def fn(bot) -> None，长驻运行）"""
+    return list(_startups)

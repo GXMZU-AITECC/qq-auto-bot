@@ -51,6 +51,10 @@ class OneBotClient:
         """调用 LLOneBot HTTP API 发送群消息"""
         await self._api_call("send_group_msg", {"group_id": int(group_id), "message": text})
 
+    async def send_private_msg(self, user_id: str, text: str):
+        """调用 LLOneBot HTTP API 发送私聊消息"""
+        await self._api_call("send_private_msg", {"user_id": int(user_id), "message": text})
+
     async def get_group_member_name(self, group_id: str, user_id: str) -> str:
         """获取群成员的昵称（优先返回群名片，其次昵称）"""
         result = await self._api_call("get_group_member_info", {

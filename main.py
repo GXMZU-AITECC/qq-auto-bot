@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 
 from bot import OneBotClient
 from config import get
-from features import discover, dispatch
+from features import discover, dispatch, startups
 
 
 def _setup_logging():
@@ -55,6 +55,28 @@ async def _start_web():
     )
 
 
+async def _run_startup(fn, bot):
+    """运行功能注册的长驻协程；异常在此记录（功能内部不写日志）"""
+    try:
+        await fn(bot)
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.exception(f"启动任务异常: {e}")
+
+
+async def _cancel(*tasks):
+    for t in tasks:
+        if t:
+            t.cancel()
+    for t in tasks:
+        if t:
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+
+
 async def main():
     discover()
     logger.info("启动 QQ 机器人...")
@@ -69,18 +91,15 @@ async def main():
         logger.info(f"启动网页数据统计: http://{get('web', 'host', default='127.0.0.1')}:{get('web', 'port', default=8000)}")
         web_task = asyncio.create_task(_start_web())
 
+    feature_tasks = [asyncio.create_task(_run_startup(fn, client)) for fn in startups()]
+
     try:
         await client.start()
     except KeyboardInterrupt:
         logger.info("收到退出信号")
     finally:
         await client.stop()
-        if web_task:
-            web_task.cancel()
-            try:
-                await web_task
-            except asyncio.CancelledError:
-                pass
+        await _cancel(web_task, *feature_tasks)
         logger.info("机器人已停止")
 
 

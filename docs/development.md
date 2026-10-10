@@ -21,6 +21,7 @@ config.yaml         ← 全局配置
 configs/            ← 各功能配置文件
 features/           ← 各功能代码
   checkin/          ← 签到功能
+  scheduled/        ← 定时消息功能（后台长驻）
 web/                ← 网页数据统计（FastAPI 后端 + 前端页面）
 tests/              ← 单元测试（pytest）
 main.py             ← 启动入口（没有特殊需求不要改）
@@ -92,12 +93,38 @@ my_key = cfg.get("my_key")               # 取值，没有则返回 None
 
 ---
 
+## ⏰ 后台长驻任务（可选）
+
+命令是「群友发消息 → 触发」。如果功能要**自己按时间干活**（如定时消息），
+在 `handler.py` 里再导出一个 `STARTUP` 列表即可：
+
+```python
+# features/myfeature/handler.py
+
+async def run(bot):
+    while True:
+        await asyncio.sleep(60)
+        await bot.send_group_msg("123456789", "整点了")
+
+# ★ 导出了就由 main.py 在启动时拉起，退出时自动取消
+STARTUP = [run]
+```
+
+- 每项签名：`async def fn(bot) -> None`，**长驻运行**（内部自己写循环 / 睡眠）。
+- 启动时 `create_task`，`Ctrl+C` 退出时自动 `cancel`；异常会被捕获并记日志，不影响其它任务。
+- 只在 `STARTUP` 里做长驻循环，**别在 import 时执行网络 / IO**，否则会拖慢启动、破坏离线测试。
+
+---
+
 ## ⚙️ 配置说明
 
 | 文件 | 用途 |
 |------|------|
 | `config.yaml` | 全局配置，改 LLOneBot 地址、日志等级等 |
 | `configs/checkin.yaml` | 签到功能的时段和时长 |
+| `configs/scheduled.yaml` | 定时消息的计划与节假日日历源（示例模板） |
+
+> 💡 想让某个功能的配置**不入库**，复制成 `configs/<名>.local.yaml` 填真实值即可——`load_feature_config` 会优先加载它，且该文件已被 `.gitignore` 忽略。
 
 ---
 
@@ -153,8 +180,9 @@ python -c "from features import discover, _commands, _patterns; discover(); prin
 
 ## ⚠️ 注意事项
 
-- 每步功能里，**有 `COMMANDS`（精确）或 `COMMAND_PATTERNS`（正则）才会被自动发现**
+- 每步功能里，**有 `COMMANDS`（精确）、`COMMAND_PATTERNS`（正则）或 `STARTUP`（后台任务）才会被自动发现**
 - handler 函数必须是 `async`
 - 所有 handler 签名：`(bot, group_id, user_id, text)`，`text` 是原始消息全文（用不到就忽略）
 - 返回 `None` 或空字符串 = 不回复
-- `bot` 可用的函数：`bot.send_group_msg(群号, 内容)`、`bot.get_group_member_name(群号, QQ号)`
+- 不要在 `handler.py` 的 import 阶段执行网络 / IO（`STARTUP` 的循环要等启动后才跑）
+- `bot` 可用的函数：`bot.send_group_msg(群号, 内容)`、`bot.send_private_msg(QQ号, 内容)`、`bot.get_group_member_name(群号, QQ号)`
