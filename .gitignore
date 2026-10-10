@@ -9,6 +9,9 @@ __pycache__/
 data/
 logs/
 
+# 本地真实配置(不入库, 由 config.py 优先加载)
+configs/*.local.yaml
+
 # Node
 node_modules/
 

@@ -25,9 +25,11 @@ def get(*keys, default=None):
 
 
 def load_feature_config(name: str) -> dict:
-    """加载 features/{name}.yaml 配置文件"""
-    path = os.path.join(os.path.dirname(__file__), "configs", f"{name}.yaml")
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+    """加载 configs/{name}.yaml；若存在 configs/{name}.local.yaml 则优先加载本地真实配置"""
+    base = os.path.join(os.path.dirname(__file__), "configs")
+    for fname in (f"{name}.local.yaml", f"{name}.yaml"):
+        path = os.path.join(base, fname)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return yaml.safe_load(f) or {}
+    return {}

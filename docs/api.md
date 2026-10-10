@@ -28,6 +28,23 @@ async def 函数名(bot, group_id: str, user_id: str, text: str) -> str | None:
 - 返 `字符串` → 机器人自动发送到群里
 - 返 `None` → 不回复
 
+### 后台长驻任务（可选 `STARTUP`）
+
+功能要自己按时间干活（非消息驱动）时，导出 `STARTUP` 列表：
+
+```python
+async def run(bot):
+    while True:
+        await asyncio.sleep(60)
+        ...
+
+STARTUP = [run]      # 启动时 create_task，退出时自动 cancel
+```
+
+- 每项签名 `async def fn(bot) -> None`，内部自己写循环。
+- 异常被捕获并记日志，不影响其它任务。
+- 别在 import 阶段执行网络 / IO。
+
 ---
 
 ## 🤖 bot 对象（bot.py）
@@ -40,6 +57,14 @@ async def 函数名(bot, group_id: str, user_id: str, text: str) -> str | None:
 
 ```python
 await bot.send_group_msg("123456789", "你好")
+```
+
+### `bot.send_private_msg(user_id, text)`
+
+发送私聊消息。
+
+```python
+await bot.send_private_msg("10001", "你好")
 ```
 
 ### `bot.get_group_member_name(group_id, user_id)`
@@ -96,3 +121,7 @@ shifts = cfg.get("checkin_shifts", [])
 ### `dispatch(bot, group_id, user_id, text)`
 
 路由消息到对应的命令处理器。先精确匹配 `COMMANDS`，再按注册顺序依次尝试 `COMMAND_PATTERNS` 的正则全匹配，都找不到返回 `None`。
+
+### `startups()`
+
+返回各功能注册的 `STARTUP` 协程列表（`async def fn(bot) -> None`）。由 `main.py` 在启动时拉起、退出时取消，一般不需要手动调。
