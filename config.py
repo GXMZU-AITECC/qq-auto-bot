@@ -25,7 +25,7 @@ def get(*keys, default=None):
 
 
 def load_feature_config(name: str) -> dict:
-    """加载 features/{name}.yaml 配置文件"""
+    """加载 configs/{name}.yaml 配置文件"""
     path = os.path.join(os.path.dirname(__file__), "configs", f"{name}.yaml")
     if not os.path.exists(path):
         return {}

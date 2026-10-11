@@ -41,7 +41,7 @@ def discover():
     _commands.clear()
     _patterns.clear()
 
-    for finder, name, ispkg in pkgutil.iter_modules(__path__):
+    for _, name, ispkg in pkgutil.iter_modules(__path__):
         if not ispkg:
             continue
         try:

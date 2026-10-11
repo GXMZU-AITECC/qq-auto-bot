@@ -9,7 +9,16 @@
 
 ## 一、获取代码
 
-本仓库的默认分支不是 `sandbox`，clone 后要切过去：
+`sandbox` 不是仓库默认分支，拿到它有两种方式：
+
+**直接 clone `sandbox`（最省事）**
+
+```bash
+git clone -b sandbox https://github.com/GXMZU-AITECC/qq-auto-bot.git
+cd qq-auto-bot
+```
+
+**先 clone 再切过去**
 
 ```bash
 git clone https://github.com/GXMZU-AITECC/qq-auto-bot.git
@@ -65,18 +74,17 @@ pip install -r requirements.txt
 
 ## 五、怎么提交代码
 
-1. 从 `sandbox` 拉你自己的分支：
+1. 从 `sandbox` 新建你自己的分支：
 
    ```bash
-   git fetch origin
-   git switch -c feature/myfeature origin/sandbox
+   git switch -c feature/myfeature
    ```
 
 2. 写功能，只改 `features/` 和 `configs/`，**别动基础 API**（`main.py` / `bot.py` / `config.py` / `features/__init__.py`）。
 3. 提交并推送：
 
    ```bash
-   git add features/myfeature configs/myfeature.yaml
+   git add .
    git commit -m "feat: 我的新功能"
    git push -u origin feature/myfeature
    ```

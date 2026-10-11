@@ -12,15 +12,27 @@
 
 ## 怎么参与
 
-1. 从最新 `sandbox` 拉你自己的分支：
+1. 拿到代码（切到 `sandbox`）：
 
    ```bash
-   git fetch origin
-   git switch -c feature/myfeature origin/sandbox
+   # 方式一：直接 clone sandbox
+   git clone -b sandbox https://github.com/GXMZU-AITECC/qq-auto-bot.git
+   cd qq-auto-bot
+
+   # 方式二：先 clone 再切
+   git clone https://github.com/GXMZU-AITECC/qq-auto-bot.git
+   cd qq-auto-bot
+   git switch sandbox
    ```
 
-2. 写功能，只放在 `features/<名>/`（配套配置放 `configs/<名>.yaml`）。
-3. 推送并向 `sandbox` 提 PR，**CI 通过即可合并**。
+2. 从 `sandbox` 新建你自己的分支：
+
+   ```bash
+   git switch -c feature/myfeature
+   ```
+
+3. 写功能，只放在 `features/<名>/`（配套配置放 `configs/<名>.yaml`）。
+4. 推送并**向 `sandbox` 提 PR**（base 选 `sandbox`），**CI 通过即可合并**。
 
 > 所有改动都走 PR 合并进 `sandbox`，不要直接推 `sandbox`。
 
