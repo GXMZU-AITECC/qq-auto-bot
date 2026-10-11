@@ -1,10 +1,14 @@
 import asyncio
 import json
 import logging
+from pathlib import Path
+
 import httpx
 import websockets
 
 logger = logging.getLogger("bot")
+
+_RESOURCES = Path(__file__).resolve().parent / "resources"
 
 
 class OneBotClient:
@@ -50,6 +54,10 @@ class OneBotClient:
     async def send_group_msg(self, group_id: str, text: str):
         """调用 LLOneBot HTTP API 发送群消息"""
         await self._api_call("send_group_msg", {"group_id": int(group_id), "message": text})
+
+    def image(self, name: str) -> str:
+        """返回 resources/ 里图片的 CQ 码，功能里直接 return bot.image("x.png")"""
+        return f"[CQ:image,file={(_RESOURCES / name).as_uri()}]"
 
     async def get_group_member_name(self, group_id: str, user_id: str) -> str:
         """获取群成员的昵称（优先返回群名片，其次昵称）"""

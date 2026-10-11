@@ -87,6 +87,7 @@ my_key = cfg.get("my_key")               # 取值，没有则返回 None
 > ✅ **完成。** 启动时会自动发现，main.py 不需要改任何东西。
 
 > 💡 **有现成的 Demo 可参考：** `features/demo/handler.py` + `configs/demo.yaml`
+> 另一个更完整的范例：`features/easteregg/`（含配置开关、多行回复）。
 >
 > 看完这 3 步再去看 Demo 代码，马上就能上手。
 
@@ -133,6 +134,23 @@ save(d)          # 存回去
 ```
 
 等数据量大了、需要查询了，再换成 SQLite。怎么存没有标准答案，够用就行。
+
+---
+
+## 🖼️ 发送图片
+
+功能要让 bot 发图片：把图片放进仓库根的 **`resources/`** 目录，然后一行返回：
+
+```python
+async def cmd_pic(bot, group_id, user_id, text):
+    return bot.image("hello.png")   # 图片放 resources/ 里，返回即自动发到群里
+```
+
+- `bot.image("文件名")` 自动拼好绝对路径，你只管把图丢进 `resources/`。
+- 图片随代码一起提交，服务器更新时会一起拉过去。
+- **别放太大的文件**（仓库会变大）；大图/视频改用图床 URL：
+  `return "[CQ:image,file=https://example.com/a.png]"`。
+- 文件名用英文/数字，避免中文与空格，省得路径出问题。
 
 ---
 

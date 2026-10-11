@@ -51,6 +51,15 @@ name = await bot.get_group_member_name("123456789", "10001")
 # → "张三"
 ```
 
+### `bot.image(name)`
+
+返回 `resources/` 里图片的 CQ 码，直接 `return` 即发送。
+
+```python
+async def cmd_pic(bot, group_id, user_id, text):
+    return bot.image("hello.png")   # 图片放 resources/hello.png
+```
+
 ### `bot._api_call(action, params)`
 
 直接调 OneBot API（一般用不到）。

@@ -92,6 +92,7 @@ config.yaml          ← 全局配置
 configs/             ← 各功能配置
 features/            ← 你的功能都放这（自动发现）
   demo/              ← 范例功能
+resources/           ← 功能要发的图片放这
 docs/                ← 文档
 tests/               ← 单元测试
 main.py              ← 启动入口（别改）
