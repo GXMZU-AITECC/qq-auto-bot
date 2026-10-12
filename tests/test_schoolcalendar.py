@@ -15,7 +15,9 @@ BASE_CFG = {
     "enabled": True,
     "semester": {"name": "测试学期", "start": date(2026, 9, 7), "weeks": 20},
     "holidays": [{"from": date(2026, 10, 1), "to": date(2026, 10, 7), "name": "国庆节"}],
-    "makeups": [{"date": date(2026, 10, 10), "name": "国庆调休补班"}],
+    "makeups": [
+        {"date": date(2026, 10, 10), "name": "国庆调休补班", "for_weekday": "周四"}
+    ],
 }
 
 
@@ -38,7 +40,38 @@ def test_法定假期区间放假():
 
 def test_调休补班的周末算上课():
     # 2026-10-10 是周六，但配了调休补班 → 优先级高于周末
-    assert handler.judge(date(2026, 10, 10), BASE_CFG) == ("上课", "国庆调休补班")
+    assert handler.judge(date(2026, 10, 10), BASE_CFG) == (
+        "上课",
+        "国庆调休补班，上周四的课",
+    )
+
+
+def test_补班没写for_weekday时只给补班名():
+    cfg = dict(BASE_CFG)
+    cfg["makeups"] = [{"date": date(2026, 10, 10), "name": "国庆调休补班"}]
+    assert handler.judge(date(2026, 10, 10), cfg) == ("上课", "国庆调休补班")
+
+
+@pytest.mark.parametrize(
+    "写法",
+    ["周四", "星期四", "4", 4],
+)
+def test_for_weekday支持多种写法(写法):
+    cfg = dict(BASE_CFG)
+    cfg["makeups"] = [
+        {"date": date(2026, 10, 10), "name": "国庆调休补班", "for_weekday": 写法}
+    ]
+    assert handler.judge(date(2026, 10, 10), cfg)[1].endswith("上周四的课")
+
+
+def test_for_weekday写错时不影响补班判定():
+    cfg = dict(BASE_CFG)
+    cfg["makeups"] = [
+        {"date": date(2026, 10, 10), "name": "国庆调休补班", "for_weekday": "周八"}
+    ]
+    status, reason = handler.judge(date(2026, 10, 10), cfg)
+    assert status == "上课"
+    assert "周几" not in reason
 
 
 def test_学期区间外不算上课():
@@ -77,29 +110,40 @@ def test_坏日期不会被当成有效条目():
 
 def test_未启用时命令不回复(monkeypatch):
     monkeypatch.setattr(handler, "load_feature_config", lambda name: {"enabled": False})
-    assert asyncio.run(handler.cmd_calendar(None, "1", "2", "/校历")) is None
+    assert asyncio.run(handler.cmd_calendar(None, "1", "2", "校历")) is None
 
 
 def test_校历命令给出状态与周次(monkeypatch):
     monkeypatch.setattr(handler, "load_feature_config", lambda name: BASE_CFG)
-    out = asyncio.run(handler.cmd_calendar(None, "1", "2", "/校历"))
+    out = asyncio.run(handler.cmd_calendar(None, "1", "2", "校历"))
     assert "·" in out
     assert "测试学期" in out
 
 
-def test_调休命令列出补班日期(monkeypatch):
+def test_调休命令列出补班日期与补周几(monkeypatch):
     monkeypatch.setattr(handler, "load_feature_config", lambda name: BASE_CFG)
-    out = asyncio.run(handler.cmd_makeups(None, "1", "2", "/调休"))
+    out = asyncio.run(handler.cmd_makeups(None, "1", "2", "调休"))
     assert "2026-10-10" in out
     assert "国庆调休补班" in out
+    assert "上周四的课" in out
 
 
 def test_没有调休时给出空提示(monkeypatch):
     cfg = dict(BASE_CFG)
     cfg["makeups"] = []
     monkeypatch.setattr(handler, "load_feature_config", lambda name: cfg)
-    out = asyncio.run(handler.cmd_makeups(None, "1", "2", "/调休"))
+    out = asyncio.run(handler.cmd_makeups(None, "1", "2", "调休"))
     assert "没有配置" in out
+
+
+def test_校历没配好时不把配置路径发到群里(monkeypatch, caplog):
+    """配置缺失是维护者的事：只进后台日志，群友不该看到内部路径。"""
+    cfg = {"enabled": True}  # 故意不给 semester
+    monkeypatch.setattr(handler, "load_feature_config", lambda name: cfg)
+    with caplog.at_level("WARNING", logger="features.schoolcalendar"):
+        out = asyncio.run(handler.cmd_calendar(None, "1", "2", "校历"))
+    assert "configs/schoolcalendar.yaml" not in out  # 回复里没有内部路径
+    assert any("semester.start" in r.message for r in caplog.records)  # 进了日志
 
 
 @pytest.mark.parametrize(
@@ -114,6 +158,12 @@ def test_自然语言问法按天偏移(monkeypatch, 问法, 期望偏移):
 
 
 def test_导出了命令与正则():
-    assert "/校历" in handler.COMMANDS
-    assert "/调休" in handler.COMMANDS
+    assert "校历" in handler.COMMANDS
+    assert "调休" in handler.COMMANDS
     assert handler.COMMAND_PATTERNS
+
+
+def test_命令名不带斜杠():
+    """与 demo(烤肠) / easteregg(我们会赢吗) 的现有指令风格保持一致。"""
+    for cmd in handler.COMMANDS:
+        assert not cmd.startswith("/"), f"命令 {cmd!r} 不应带斜杠"
