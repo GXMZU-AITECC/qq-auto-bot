@@ -5,15 +5,18 @@
 
 校历数据写在 configs/schoolcalendar.yaml，人工维护，每次查询现读（改配置不用重启）。
 
-命令：
-    /校历          今天的状态 + 第几教学周
-    /调休          列出本学期所有调休补班日期
-    今天上课吗     自然语言问法，也支持「明天」「后天」
+命令（与 demo / easteregg 一致，不带斜杠）：
+    校历          今天的状态 + 第几教学周
+    调休          列出本学期所有调休补班日期
+    今天上课吗    自然语言问法，也支持「明天」「后天」
 """
 
+import logging
 from datetime import date, timedelta
 
 from config import load_feature_config
+
+logger = logging.getLogger("features.schoolcalendar")
 
 CFG_NAME = "schoolcalendar"
 WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -40,8 +43,36 @@ def _to_date(value):
     return None
 
 
+def _norm_weekday(value):
+    """把配置里的 for_weekday 归一成「周X」，支持 周四 / 星期四 / 4 / '4'。
+
+    解析不了返回 None —— 补班判定照样生效，只是回复里不显示补哪天的课。
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return WEEKDAY_NAMES[value - 1] if 1 <= value <= 7 else None
+    if isinstance(value, str):
+        raw = value.strip()
+        if raw in WEEKDAY_NAMES:
+            return raw
+        if raw.isdigit():
+            n = int(raw)
+            return WEEKDAY_NAMES[n - 1] if 1 <= n <= 7 else None
+        # 兼容「星期四」这类写法
+        tail = raw[-1] if raw else ""
+        for name in WEEKDAY_NAMES:
+            if name.endswith(tail):
+                return name
+    return None
+
+
 def _point_entries(cfg, key):
-    """解析单日条目（调休补班）：[{'date':..., 'name':...}] → [(date, name)]。"""
+    """解析单日条目（调休补班）。
+
+    [{'date':..., 'name':..., 'for_weekday':...}] → [(date, name, for_weekday)]
+    其中 for_weekday 是「周X」或 None，表示这天补周几的课。
+    """
     out = []
     for item in cfg.get(key) or []:
         if not isinstance(item, dict):
@@ -49,7 +80,13 @@ def _point_entries(cfg, key):
         day = _to_date(item.get("date"))
         if day is None:
             continue
-        out.append((day, str(item.get("name") or "").strip()))
+        out.append(
+            (
+                day,
+                str(item.get("name") or "").strip(),
+                _norm_weekday(item.get("for_weekday")),
+            )
+        )
     return out
 
 
@@ -98,9 +135,12 @@ def judge(day, cfg):
     info = semester_info(day, cfg)
 
     # 1. 调休补班优先：周末也可能要上课
-    for makeup_day, name in _point_entries(cfg, "makeups"):
+    for makeup_day, name, for_weekday in _point_entries(cfg, "makeups"):
         if makeup_day == day:
-            return "上课", name or "调休补班"
+            reason = name or "调休补班"
+            if for_weekday:
+                reason = f"{reason}，上{for_weekday}的课"
+            return "上课", reason
 
     # 2. 放假区间（法定节假日、寒暑假等）
     for start, end, name in _range_entries(cfg, "holidays"):
@@ -132,7 +172,7 @@ def _fmt_result(day, cfg):
 
 
 async def cmd_calendar(bot, group_id, user_id, text):
-    """/校历：今天的状态 + 本学期第几教学周。"""
+    """校历：今天的状态 + 本学期第几教学周。"""
     cfg = load_feature_config(CFG_NAME)
     if not cfg.get("enabled", False):
         return None
@@ -142,7 +182,10 @@ async def cmd_calendar(bot, group_id, user_id, text):
 
     info = semester_info(today, cfg)
     if info is None:
-        lines.append("⚠️ 校历还没配好：请在 configs/schoolcalendar.yaml 填 semester.start 与 weeks")
+        # 配置缺失是维护者要处理的事，只进后台日志，不发到群里
+        logger.warning(
+            "校历未配置：请在 configs/schoolcalendar.yaml 填写 semester.start 与 weeks"
+        )
     elif info["in_range"]:
         lines.append(f"📖 {info['name']} · 第 {info['week']} 教学周（共 {info['weeks']} 周）")
     else:
@@ -154,17 +197,23 @@ async def cmd_calendar(bot, group_id, user_id, text):
 
 
 async def cmd_makeups(bot, group_id, user_id, text):
-    """/调休：列出本学期所有调休补班日期。"""
+    """调休：列出本学期所有调休补班日期，并说明补周几的课。"""
     cfg = load_feature_config(CFG_NAME)
     if not cfg.get("enabled", False):
         return None
 
-    entries = sorted(_point_entries(cfg, "makeups"))
+    entries = sorted(_point_entries(cfg, "makeups"), key=lambda e: e[0])
     if not entries:
         return "本学期没有配置调休补班安排。"
 
     lines = ["📌 本学期调休补班安排："]
-    lines += [f"  · {_fmt_day(day)}{' ' + name if name else ''}" for day, name in entries]
+    for day, name, for_weekday in entries:
+        parts = [_fmt_day(day)]
+        if name:
+            parts.append(name)
+        if for_weekday:
+            parts.append(f"上{for_weekday}的课")
+        lines.append("  · " + " ".join(parts))
     return "\n".join(lines)
 
 
@@ -184,10 +233,10 @@ async def cmd_ask(bot, group_id, user_id, text):
     return _fmt_result(target, cfg)
 
 
-# ★ 精确命令
+# ★ 精确命令（不带斜杠，与 demo / easteregg 的现有指令风格保持一致）
 COMMANDS = {
-    "/校历": cmd_calendar,
-    "/调休": cmd_makeups,
+    "校历": cmd_calendar,
+    "调休": cmd_makeups,
 }
 
 # ★ 正则命令：整条消息全匹配才触发
