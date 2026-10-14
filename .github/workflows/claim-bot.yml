@@ -1,0 +1,39 @@
+name: 认领管家
+
+on:
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: "7 1 * * *"   # 每天 09:07（北京时间）扫描一次超时
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+# 同一条 issue 的认领串行处理，防止两人同时 /receive 造成双 assign
+concurrency:
+  group: claim-bot-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  claim:
+    if: ${{ github.event_name == 'issue_comment' && !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 处理 /receive 认领
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ toJson(github.event) }}
+        run: python3 .github/scripts/claim_bot.py claim
+
+  sweep:
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 扫描超时、预警、释放
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/claim_bot.py sweep
