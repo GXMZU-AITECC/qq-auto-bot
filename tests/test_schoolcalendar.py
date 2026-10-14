@@ -21,6 +21,21 @@ BASE_CFG = {
 }
 
 
+@pytest.fixture(autouse=True)
+def mock_network(monkeypatch):
+    """自动拦截网络请求，让本地和 CI 测试都不依赖真实 API。"""
+    # 1. 模拟 ensure，什么都不做直接返回
+    async def fake_ensure(year):
+        pass
+
+    # 2. 模拟 is_workday，按照星期几返回基础逻辑
+    def fake_is_workday(day):
+        return day.weekday() < 5  # 周一到周五返回 True，周六日返回 False
+
+    monkeypatch.setattr(handler, "ensure", fake_ensure)
+    monkeypatch.setattr(handler, "is_workday", fake_is_workday)
+
+
 def test_学期内的普通工作日上课():
     # 2026-09-08 周二，学期内、非假期、非周末
     assert asyncio.run(handler.judge(date(2026, 9, 8), BASE_CFG)) == ("上课", "正常教学日")
