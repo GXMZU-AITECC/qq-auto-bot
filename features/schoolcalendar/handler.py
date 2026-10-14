@@ -160,7 +160,10 @@ async def judge(day, cfg):
     if is_work is True:
         return "上课", "正常教学日"
     elif is_work is False:
-        return "放假", "周末或法定节假日"
+        # 精确区分周末和法定节假日，保证测试通过且回复更精准
+        if day.weekday() >= 5:
+            return "放假", "周末"
+        return "放假", "法定节假日"
     else:
         # 5. 未知情况（None）降级：使用原有的周末判断兜底
         if day.weekday() >= 5:
