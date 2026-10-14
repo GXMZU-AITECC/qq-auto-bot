@@ -23,24 +23,24 @@ BASE_CFG = {
 
 def test_学期内的普通工作日上课():
     # 2026-09-08 周二，学期内、非假期、非周末
-    assert handler.judge(date(2026, 9, 8), BASE_CFG) == ("上课", "正常教学日")
+    assert asyncio.run(handler.judge(date(2026, 9, 8), BASE_CFG)) == ("上课", "正常教学日")
 
 
 def test_学期内的周末放假():
     # 2026-09-12 周六
-    status, reason = handler.judge(date(2026, 9, 12), BASE_CFG)
+    status, reason = asyncio.run(handler.judge(date(2026, 9, 12), BASE_CFG))
     assert status == "放假"
     assert reason == "周末"
 
 
 def test_法定假期区间放假():
     # 2026-10-01 国庆
-    assert handler.judge(date(2026, 10, 1), BASE_CFG) == ("放假", "国庆节")
+    assert asyncio.run(handler.judge(date(2026, 10, 1), BASE_CFG)) == ("放假", "国庆节")
 
 
 def test_调休补班的周末算上课():
     # 2026-10-10 是周六，但配了调休补班 → 优先级高于周末
-    assert handler.judge(date(2026, 10, 10), BASE_CFG) == (
+    assert asyncio.run(handler.judge(date(2026, 10, 10), BASE_CFG)) == (
         "上课",
         "国庆调休补班，上周四的课",
     )
@@ -49,7 +49,7 @@ def test_调休补班的周末算上课():
 def test_补班没写for_weekday时只给补班名():
     cfg = dict(BASE_CFG)
     cfg["makeups"] = [{"date": date(2026, 10, 10), "name": "国庆调休补班"}]
-    assert handler.judge(date(2026, 10, 10), cfg) == ("上课", "国庆调休补班")
+    assert asyncio.run(handler.judge(date(2026, 10, 10), cfg)) == ("上课", "国庆调休补班")
 
 
 @pytest.mark.parametrize(
@@ -61,7 +61,7 @@ def test_for_weekday支持多种写法(写法):
     cfg["makeups"] = [
         {"date": date(2026, 10, 10), "name": "国庆调休补班", "for_weekday": 写法}
     ]
-    assert handler.judge(date(2026, 10, 10), cfg)[1].endswith("上周四的课")
+    assert asyncio.run(handler.judge(date(2026, 10, 10), cfg))[1].endswith("上周四的课")
 
 
 def test_for_weekday写错时不影响补班判定():
@@ -69,19 +69,19 @@ def test_for_weekday写错时不影响补班判定():
     cfg["makeups"] = [
         {"date": date(2026, 10, 10), "name": "国庆调休补班", "for_weekday": "周八"}
     ]
-    status, reason = handler.judge(date(2026, 10, 10), cfg)
+    status, reason = asyncio.run(handler.judge(date(2026, 10, 10), cfg))
     assert status == "上课"
     assert "周几" not in reason
 
 
 def test_学期区间外不算上课():
     # 2026-08-01 早于学期开始
-    assert handler.judge(date(2026, 8, 1), BASE_CFG) == ("不在学期内", "")
+    assert asyncio.run(handler.judge(date(2026, 8, 1), BASE_CFG)) == ("不在学期内", "")
 
 
 def test_超出学期总周数也不算上课():
     # 20 周 = 140 天，2026-09-07 起，最后一天是 2027-01-24
-    assert handler.judge(date(2027, 2, 1), BASE_CFG) == ("不在学期内", "")
+    assert asyncio.run(handler.judge(date(2027, 2, 1), BASE_CFG)) == ("不在学期内", "")
 
 
 def test_教学周次从第一周开始算():
@@ -105,7 +105,7 @@ def test_坏日期不会被当成有效条目():
     cfg = dict(BASE_CFG)
     cfg["makeups"] = [{"date": "不是日期", "name": "坏数据"}]
     # 坏条目跳过，这天仍是普通的学期内周日
-    assert handler.judge(date(2026, 9, 13), cfg) == ("放假", "周末")
+    assert asyncio.run(handler.judge(date(2026, 9, 13), cfg)) == ("放假", "周末")
 
 
 def test_未启用时命令不回复(monkeypatch):
