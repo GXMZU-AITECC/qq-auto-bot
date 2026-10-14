@@ -1,7 +1,7 @@
 """校历查询：群里问「今天上课吗」，机器人按校历回答（含调休补课）。
 
-判定优先级：**调休补班 > 放假区间 > 不在学期内 > 周末 > 正常教学日**。
-这样调休补班的周末会被正确判成「上课」，而法定假期里的日子一律「放假」。
+判定优先级：**学校特有假期 > 学校特有调休补班 > 不在学期内 > (通用节假日/周末) > 正常教学日**。
+通用节假日和全国调休复用 features.scheduled.calendar 的接口，学校特有的寒暑假和调休保留在本配置。
 
 校历数据写在 configs/schoolcalendar.yaml，人工维护，每次查询现读（改配置不用重启）。
 
@@ -15,6 +15,7 @@ import logging
 from datetime import date, timedelta
 
 from config import load_feature_config
+from features.scheduled.calendar import ensure, is_workday
 
 logger = logging.getLogger("features.schoolcalendar")
 
@@ -127,14 +128,19 @@ def semester_info(day, cfg):
     }
 
 
-def judge(day, cfg):
+async def judge(day, cfg):
     """判定某天上课还是放假，返回 (状态, 原因)。
 
     状态只有三种：上课 / 放假 / 不在学期内。
     """
     info = semester_info(day, cfg)
 
-    # 1. 调休补班优先：周末也可能要上课
+    # 1. 学校特有的放假区间（如寒暑假、校运会等）
+    for start, end, name in _range_entries(cfg, "holidays"):
+        if start <= day <= end:
+            return "放假", name or "假期"
+
+    # 2. 学校特有的调休补班（周末上课）
     for makeup_day, name, for_weekday in _point_entries(cfg, "makeups"):
         if makeup_day == day:
             reason = name or "调休补班"
@@ -142,29 +148,33 @@ def judge(day, cfg):
                 reason = f"{reason}，上{for_weekday}的课"
             return "上课", reason
 
-    # 2. 放假区间（法定节假日、寒暑假等）
-    for start, end, name in _range_entries(cfg, "holidays"):
-        if start <= day <= end:
-            return "放假", name or "假期"
-
     # 3. 学期区间外一律不算上课，避免误报
     if info is None or not info["in_range"]:
         return "不在学期内", ""
 
-    # 4. 学期内的周末
-    if day.weekday() >= 5:
-        return "放假", "周末"
+    # 4. 复用通用节假日/调休接口
+    # 先 await ensure(year) 确保缓存就绪，再判断
+    await ensure(day.year)
+    is_work = is_workday(day)
 
-    return "上课", "正常教学日"
+    if is_work is True:
+        return "上课", "正常教学日"
+    elif is_work is False:
+        return "放假", "周末或法定节假日"
+    else:
+        # 5. 未知情况（None）降级：使用原有的周末判断兜底
+        if day.weekday() >= 5:
+            return "放假", "周末"
+        return "上课", "正常教学日"
 
 
 def _fmt_day(day):
     return f"{day.isoformat()}（{WEEKDAY_NAMES[day.weekday()]}）"
 
 
-def _fmt_result(day, cfg):
+async def _fmt_result(day, cfg):
     """把某天的判定结果拼成一行，供 /校历 与自然语言问法共用。"""
-    status, reason = judge(day, cfg)
+    status, reason = await judge(day, cfg)
     line = f"{_fmt_day(day)} · {status}"
     if reason:
         line += f"（{reason}）"
@@ -178,7 +188,7 @@ async def cmd_calendar(bot, group_id, user_id, text):
         return None
 
     today = date.today()
-    lines = [_fmt_result(today, cfg)]
+    lines = [await _fmt_result(today, cfg)]
 
     info = semester_info(today, cfg)
     if info is None:
@@ -230,7 +240,7 @@ async def cmd_ask(bot, group_id, user_id, text):
             break
 
     target = date.today() + timedelta(days=offset)
-    return _fmt_result(target, cfg)
+    return await _fmt_result(target, cfg)
 
 
 # ★ 精确命令（不带斜杠，与 demo / easteregg 的现有指令风格保持一致）
