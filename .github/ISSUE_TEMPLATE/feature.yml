@@ -1,0 +1,38 @@
+name: 功能提案
+description: 提出一个新功能或改进（开工前占题用）
+title: "[提案] "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提案！请按以下字段填写，遵守「一题一 Issue」。
+        提案经认领后方可开工，认领方式：在本 Issue 下回复「认领：姓名＋fork 链接＋分支名」，以时间最早的认领留言为准。
+  - type: textarea
+    id: what
+    attributes:
+      label: 要什么
+      description: 想实现的功能 / 改进是什么
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: 怎么用
+      description: 使用方式，如触发指令、交互流程
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 满足什么条件算完成
+    validations:
+      required: true
+  - type: textarea
+    id: not
+    attributes:
+      label: 不做什么
+      description: 明确排除的范围，避免范围蔓延
+    validations:
+      required: false

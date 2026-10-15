@@ -1,0 +1,27 @@
+# ============================================
+# 定时消息功能配置 —— 示例模板(不含真实信息)
+# 真实配置请复制本文件为 scheduled.local.yaml 后填写
+#   scheduled.local.yaml 已被 .gitignore 忽略, 且会被优先加载
+# workday: true 时, 时间按 cron 匹配, 当天是否发由节假日日历决定
+#   法定节假日不发; 调休补班的周末照发
+#   日历不可用时, 回退到该条 cron 的日/月/周字段(兜底), 故请保留有意义的周字段(如 1-5)
+# workday 省略/false 时走完整 cron (旧 AutoReply 行为)
+# message 支持换行与 CQ 码, 如 [CQ:image,file=file:///C:/path/to/image.png]
+# 注意: 若旧 Mirai AutoReply 插件仍在运行, 需禁用其 cron 以免重复发送
+# ============================================
+
+# 节假日数据源(按序尝试, 国内可达优先; {year} 会被替换为年份)
+calendar_sources:
+  - "https://timor.tech/api/holiday/year/{year}/"             # 主源, 无需 key
+  - "https://api.apihubs.cn/holiday/get?year={year}&size=400" # 备选
+
+scheduled_messages:
+  - name: "早间到岗提醒"      # 唯一名, 用于去重与日志
+    enable: true             # 每轮热加载, 可随时改
+    type: group              # group=群聊 / private=私聊
+    target: 123456789        # 群号或 QQ 号(改成你的)
+    cron: "30 7 * * 1-5"     # 5 段: 分 时 日 月 周; 周字段兼作"日历不可用时的兜底"
+    workday: true            # true=按日历(含调休), 日历未知则回退 cron 周字段
+    message: |
+      【定时消息】新的一天，注意按时到岗。
+      [CQ:image,file=file:///C:/path/to/image.png]

@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装 Python 依赖
+        run: pip install -r requirements-dev.txt
+
+      - name: 静态检查 (ruff)
+        id: ruff
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          if ruff check . 2>&1 | tee ruff.log; then
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 单元测试 (pytest)
+        id: pytest
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          if pytest -q 2>&1 | tee pytest.log; then
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 安装前端依赖
+        run: npm ci --prefix web
+      - name: 前端检查 (eslint)
+        id: eslint
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          if npm --prefix web run lint 2>&1 | tee eslint.log; then
+            echo "status=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 把报告贴回 PR
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          RUFF: ${{ steps.ruff.outputs.status }}
+          PYTEST: ${{ steps.pytest.outputs.status }}
+          ESLINT: ${{ steps.eslint.outputs.status }}
+        run: |
+          MARKER="<!-- ci-report -->"
+          {
+            echo "$MARKER"
+            echo "## CI 检查报告"
+            echo ""
+            echo "提交 \`${GITHUB_SHA:0:7}\`"
+            echo ""
+            [ "$RUFF" = passed ]   && echo "- ✅ 静态检查 (ruff)"   || echo "- ❌ 静态检查 (ruff)"
+            [ "$PYTEST" = passed ] && echo "- ✅ 单元测试 (pytest)" || echo "- ❌ 单元测试 (pytest)"
+            [ "$ESLINT" = passed ] && echo "- ✅ 前端检查 (eslint)" || echo "- ❌ 前端检查 (eslint)"
+            echo ""
+            for pair in "ruff:$RUFF" "pytest:$PYTEST" "eslint:$ESLINT"; do
+              name="${pair%%:*}"; status="${pair##*:}"
+              if [ "$status" != "passed" ]; then
+                echo "<details><summary>❌ $name 失败详情</summary>"
+                echo ""
+                echo '```'
+                tail -n 40 "$name.log" 2>/dev/null || echo "(无日志)"
+                echo '```'
+                echo ""
+                echo "</details>"
+                echo ""
+              fi
+            done
+          } > report.md
+
+          cid=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -1)
+          if [ -n "$cid" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -F body=@report.md >/dev/null
+            echo "已更新 PR #$PR 的检查报告"
+          else
+            gh pr comment "$PR" --body-file report.md
+            echo "已在 PR #$PR 新建检查报告"
+          fi
+
+      - name: 有检查未通过则失败
+        if: always()
+        run: |
+          if [ "${{ steps.ruff.outputs.status }}" != "passed" ] \
+            || [ "${{ steps.pytest.outputs.status }}" != "passed" ] \
+            || [ "${{ steps.eslint.outputs.status }}" != "passed" ]; then
+            echo "CI 有检查未通过"
+            exit 1
+          fi
+          echo "全部检查通过"
