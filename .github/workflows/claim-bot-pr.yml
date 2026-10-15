@@ -1,0 +1,31 @@
+name: 认领管家（PR 状态）
+
+# 这个文件只放 sandbox。GitHub 的 pull_request 事件用的是 PR「合并引用」里的
+# workflow，所以想让「开 PR / 合并 PR」立刻改认领状态，文件必须存在于 sandbox。
+# 脚本不在这里，从 main 取（ref: main），逻辑只有一处，别放第二份。
+on:
+  pull_request:
+    types: [opened, reopened, closed]
+    branches: [sandbox]
+
+permissions:
+  contents: read
+  issues: write
+
+# 同一个 PR 的事件串行处理
+concurrency:
+  group: claim-bot-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main          # 脚本永远用 main 上的最新版
+      - name: 按 PR 事件流转认领状态
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ toJson(github.event) }}
+        run: python3 .github/scripts/claim_bot.py pr
