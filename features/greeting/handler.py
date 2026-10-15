@@ -7,7 +7,7 @@ async def cmd_morning(bot, group_id, user_id, text):
     """Reply to morning greetings."""
     return "早安！今天也要开心哦～"
 
-# 模糊匹配：以「早安」开头的消息
+# 模糊匹配：以「早安」开头的消息（全文匹配，允许后续字符）
 COMMAND_PATTERNS = {
-    r"^早安": cmd_morning,
+    r"^早安.*": cmd_morning,
 }
