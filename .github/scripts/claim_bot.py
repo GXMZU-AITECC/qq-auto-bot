@@ -14,6 +14,7 @@
   - 一人同时只能认领一条。
   - 状态流转：已认领 →（该认领人开了 PR）进行中 →（该 PR 合并）已完成；
     PR 关闭且未合并则退回「已认领」。计时从认领那刻起算，进行中不停表。
+  - PR 一律指「该认领人开的、目标分支为 sandbox 的 PR」；别的分支的 PR 不算进度。
   - 第 5 天还没开 PR → 预警一次；第 7 天还没开 PR → 释放。
   - 「已完成」只贴标签、摘掉「认领任务」，不关 issue。
   - 只有「认领回复」「第 5 天预警」「第 7 天释放」三处发评论，其余流转静默改标签。
@@ -99,10 +100,25 @@ def timeline(number: int) -> list:
     return api("GET", f"{_issue_path(number)}/timeline?per_page=100") or []
 
 
-def claimer_pr(number: int, login: str) -> str | None:
-    """该认领人开的 PR 的最新状态：'merged' / 'open' / None。
+def pr_base(number: int) -> str | None:
+    """PR 的目标分支；取不到（404）返回 None。
 
-    只认 login 自己开的 PR；别人的提及、以及自己已关闭且未合并的 PR 都不算。
+    timeline 的 cross-referenced 事件只带 PR 号，拿不到 base，需再查一次详情。
+    """
+    try:
+        pr = api("GET", f"/repos/{REPO}/pulls/{number}")
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        return None
+    return ((pr or {}).get("base") or {}).get("ref")
+
+
+def claimer_pr(number: int, login: str) -> str | None:
+    """该认领人开的 PR（须进 sandbox）的最新状态：'merged' / 'open' / None。
+
+    只认 login 自己开的、且目标分支为 sandbox 的 PR；别人的提及、别的分支的
+    PR、以及自己已关闭且未合并的 PR 都不算 —— 与 do_pr() 的口径保持一致。
     """
     merged = opened = False
     for ev in timeline(number):
@@ -111,6 +127,8 @@ def claimer_pr(number: int, login: str) -> str | None:
         src = (ev.get("source") or {}).get("issue") or {}
         pr = src.get("pull_request") or {}
         if not pr or (src.get("user") or {}).get("login") != login:
+            continue
+        if pr_base(src.get("number")) != BASE_BRANCH:
             continue
         if pr.get("merged_at"):
             merged = True
