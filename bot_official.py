@@ -3,6 +3,7 @@
 对功能层暴露的调用契约：
   - on_message(bot, group_id, user_id, text) 回调，返回字符串则由本客户端发回
   - send_group_msg(group_id, text)
+  - send_group_image(group_id, url)
   - get_group_member_name(group_id, user_id)
 
 事件与回复：
@@ -131,6 +132,20 @@ class BotPyClient(botpy.Client):
     async def send_group_msg(self, group_id: str, text: str):
         """群发纯文本（msg_type=0）"""
         await self.api.post_group_message(group_openid=group_id, msg_type=0, content=text)
+
+    async def send_group_image(self, group_id: str, url: str):
+        """群发图片（富媒体）。url 需是平台能下载到的公网地址。
+
+        官方流程是「先上传换 file_info，再发 msg_type=7」，这里两步一起封掉。注意：
+        富媒体消息不能同时带文本，要「图文」得发两条；本地文件不支持——botpy 1.2.1
+        的上传接口只收 url，想发本地图片需自行做 base64 / 分片上传。
+        """
+        media = await self.api.post_group_file(
+            group_openid=group_id, file_type=1, url=url
+        )
+        await self.api.post_group_message(
+            group_openid=group_id, msg_type=7, media={"file_info": media["file_info"]}
+        )
 
     async def get_group_member_name(self, group_id: str, user_id: str) -> str:
         """返回该成员昵称；没有成员信息接口，只能靠历史消息里攒的 username，兜底返回 user_id。"""

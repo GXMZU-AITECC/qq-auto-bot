@@ -42,6 +42,19 @@ async def 函数名(bot, group_id: str, user_id: str, text: str) -> str | None:
 await bot.send_group_msg("123456789", "你好")
 ```
 
+### `bot.send_group_image(group_id, url)`
+
+发送群图片（富媒体）。`url` 必须是**平台能下载到的公网地址**。
+
+```python
+await bot.send_group_image("123456789", "https://example.com/cat.png")
+```
+
+- 官方平台要「先上传换 `file_info`，再发 `msg_type=7`」，本方法已把两步封装好。
+- 富媒体消息**不能同时带文本**：要「图文」就发两条（先 `send_group_msg` 再 `send_group_image`）。
+- **只支持 URL**：本地图片文件暂不支持——botpy 的上传接口只收 `url`，想发本地图需自行研究 base64 / 分片上传。
+- `file_info` 有时效，过期平台会拒绝；重新调用即可（会自动重传）。
+
 ### `bot.get_group_member_name(group_id, user_id)`
 
 获取群成员昵称（官方平台无成员接口，返回消息里攒到的昵称，兜底返回 `user_id`）。
