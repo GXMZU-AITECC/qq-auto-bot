@@ -8,6 +8,7 @@ __pycache__/
 # 数据文件
 data/
 logs/
+botpy.log*
 
 # 本地配置(不入库)
 configs/*.local.yaml
@@ -26,3 +27,7 @@ my-python-plugin/
 # 系统
 .DS_Store
 Thumbs.db
+.claude
+
+# 其他
+temp.md

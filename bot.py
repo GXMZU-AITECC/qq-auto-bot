@@ -101,9 +101,11 @@ class OneBotClient:
 
         logger.info(f"[群:{group_id}] {user_id}: {raw_msg}")
 
-        # 调用外部处理函数
+        # 调用外部处理函数，返回字符串则发回群里
         if self.on_message:
-            await self.on_message(self, group_id, user_id, text.strip())
+            reply = await self.on_message(self, group_id, user_id, text.strip())
+            if reply:
+                await self.send_group_msg(group_id, reply)
 
 
 def _extract_text(msgs: list) -> str:

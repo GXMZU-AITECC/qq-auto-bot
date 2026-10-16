@@ -39,27 +39,51 @@ def _setup_logging():
 logger = logging.getLogger("main")
 
 
-async def on_message(bot: OneBotClient, group_id: str, user_id: str, text: str):
-    reply = await dispatch(bot, group_id, user_id, text)
-    if reply:
-        await bot.send_group_msg(group_id, reply)
+async def on_message(bot, group_id: str, user_id: str, text: str):
+    """交给功能层处理，返回要发回的内容；实际发送由各客户端负责。"""
+    return await dispatch(bot, group_id, user_id, text)
+
+
+def _build_client():
+    """按配置选择后端：配了官方平台 appid/secret 就用 BotPyClient，否则用 LLOneBot。"""
+    appid = get("qqbot", "app_id", default="") or os.environ.get("QQBOT_APP_ID", "")
+    secret = get("qqbot", "secret", default="") or os.environ.get("QQBOT_APP_SECRET", "")
+
+    if appid and secret:
+        from bot_official import BotPyClient
+
+        logger.info("使用官方 QQ 机器人平台（botpy）")
+        client = BotPyClient(
+            appid=appid,
+            secret=secret,
+            sandbox=get("qqbot", "sandbox", default=True),
+            on_message=on_message,
+        )
+        # botpy 在 Client 初始化时把自己的 logger 钉死在 INFO，构造后按我们的配置同步
+        logging.getLogger("botpy").setLevel(get("log", "level", default="INFO"))
+        return client
+
+    logger.info("使用 LLOneBot（OneBot v11）")
+    return OneBotClient(
+        ws_url=get("llonebot", "ws_url", default="ws://127.0.0.1:3001"),
+        http_url=get("llonebot", "http_url", default="http://127.0.0.1:3000"),
+        on_message=on_message,
+    )
 
 
 async def main():
     discover()
     logger.info("启动 QQ 机器人...")
-    client = OneBotClient(
-        ws_url=get("llonebot", "ws_url", default="ws://127.0.0.1:3001"),
-        http_url=get("llonebot", "http_url", default="http://127.0.0.1:3000"),
-        on_message=on_message,
-    )
+    client = _build_client()
 
     try:
         await client.start()
     except KeyboardInterrupt:
         logger.info("收到退出信号")
     finally:
-        await client.stop()
+        stop = getattr(client, "stop", None)
+        if stop:
+            await stop()
         logger.info("机器人已停止")
 
 
