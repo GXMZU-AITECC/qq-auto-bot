@@ -1,0 +1,22 @@
+# ============================================
+# 全局配置模板（各功能配置在 configs/ 下）
+# 复制本文件为 config.yaml 再填真实值：
+#   cp config.yaml.example config.yaml
+# config.yaml 不入库（含密钥），每台机器各自维护。
+# ============================================
+
+# ---------- 官方 QQ 机器人平台（botpy）配置 ----------
+# 填 app_id + secret 即连接官方平台。
+# 密钥建议放环境变量 QQBOT_APP_ID / QQBOT_APP_SECRET，别写进仓库。
+qqbot:
+  app_id: ""
+  secret: ""
+  # 机器人已上线后用 false（正式环境）；仅调试未上线机器人时才用 true
+  sandbox: false
+
+# ---------- 日志配置 ----------
+log:
+  level: "INFO"
+  file: "logs/bot.log"
+  max_mb: 10
+  backup_count: 5

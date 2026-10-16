@@ -6,7 +6,8 @@
 # 1. 装依赖
 pip install -r requirements.txt
 
-# 2. 确保 LLOneBot 已启动并登录 QQ
+# 2. 复制配置模板并填官方平台凭据
+cp config.yaml.example config.yaml   # 再填 qqbot.app_id / qqbot.secret
 
 # 3. 启动机器人
 python main.py
@@ -17,13 +18,13 @@ python main.py
 ## 📂 项目结构
 
 ```
-config.yaml         ← 全局配置
+config.yaml         ← 全局配置（由 config.yaml.example 复制，不入库）
 configs/            ← 各功能配置文件
 features/           ← 各功能代码
   demo/             ← 范例功能
 tests/              ← 单元测试（pytest）
 main.py             ← 启动入口（没有特殊需求不要改）
-bot.py              ← LLOneBot 连接（不要改）
+bot_official.py     ← 官方平台连接（不要改）
 config.py           ← 配置读取工具（不要改）
 ```
 
@@ -48,8 +49,8 @@ from config import load_feature_config
 
 # 处理 /hello 命令
 # bot       → 发消息、查信息全靠它
-# group_id  → 群号
-# user_id   → 发消息的人的 QQ 号
+# group_id  → 群的 openid（官方平台标识，不是群号）
+# user_id   → 发送者的 openid（同一人在不同群 openid 不同）
 # text      → 群友发的原始消息全文(用不到就忽略)
 async def cmd_hello(bot, group_id, user_id, text):
     return "你好！"         # 返回字符串 = 机器人自动发到群里
@@ -97,7 +98,7 @@ my_key = cfg.get("my_key")               # 取值，没有则返回 None
 
 | 文件 | 用途 |
 |------|------|
-| `config.yaml` | 全局配置，改 LLOneBot 地址、日志等级等 |
+| `config.yaml` | 全局配置（凭据、日志等级），由 `config.yaml.example` 复制而来，**不入库** |
 | `configs/demo.yaml` | 范例功能的开关 |
 
 ---
@@ -137,23 +138,6 @@ save(d)          # 存回去
 
 ---
 
-## 🖼️ 发送图片
-
-功能要让 bot 发图片：把图片放进仓库根的 **`resources/`** 目录，然后一行返回：
-
-```python
-async def cmd_pic(bot, group_id, user_id, text):
-    return bot.image("hello.png")   # 图片放 resources/ 里，返回即自动发到群里
-```
-
-- `bot.image("文件名")` 自动拼好绝对路径，你只管把图丢进 `resources/`。
-- 图片随代码一起提交，服务器更新时会一起拉过去。
-- **别放太大的文件**（仓库会变大）；大图/视频改用图床 URL：
-  `return "[CQ:image,file=https://example.com/a.png]"`。
-- 文件名用英文/数字，避免中文与空格，省得路径出问题。
-
----
-
 ## 🔧 常用操作
 
 ```bash
@@ -174,4 +158,4 @@ python -c "from features import discover, _commands, _patterns; discover(); prin
 - handler 函数必须是 `async`
 - 所有 handler 签名：`(bot, group_id, user_id, text)`，`text` 是原始消息全文（用不到就忽略）
 - 返回 `None` 或空字符串 = 不回复
-- `bot` 可用的函数：`bot.send_group_msg(群号, 内容)`、`bot.get_group_member_name(群号, QQ号)`
+- `bot` 可用的函数：`bot.send_group_msg(group_id, 内容)`、`bot.get_group_member_name(group_id, user_id)`

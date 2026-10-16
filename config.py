@@ -12,7 +12,7 @@ def _load():
 
 
 def get(*keys, default=None):
-    """按层级取值，如 get('llonebot', 'ws_url')"""
+    """按层级取值，如 get('log', 'level')"""
     if _config is None:
         _load()
     val = _config

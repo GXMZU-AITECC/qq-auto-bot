@@ -1,8 +1,9 @@
 """官方 QQ 机器人平台（botpy）客户端。
 
-对功能层保持与 bot.OneBotClient 相同的调用契约，features/ 无需改动：
+对功能层暴露的调用契约：
   - on_message(bot, group_id, user_id, text) 回调，返回字符串则由本客户端发回
   - send_group_msg(group_id, text)
+  - get_group_member_name(group_id, user_id)
 
 事件与回复：
   - 群聊：默认走 on_group_at_message_create（必须 @机器人）；群主在群设置开启「全部
@@ -49,15 +50,45 @@ def _patch_group_message_create() -> None:
 _patch_group_message_create()
 
 
+def _patch_group_author_username() -> None:
+    """让 GroupMessage.author 带上 payload 里的 username。
+
+    botpy 的 `GroupMessage._User` 只保留 `member_openid`，把 `username` 丢了；补上它，
+    `get_group_member_name` 才能拿到昵称（官方平台没有成员信息接口，只能靠消息里带的）。
+    """
+    user_cls = GroupMessage._User
+    if getattr(user_cls, "_username_patched", False):
+        return
+
+    def __init__(self, data):
+        self.member_openid = data.get("member_openid", None)
+        self.username = data.get("username", None)
+
+    user_cls.__init__ = __init__
+    user_cls._username_patched = True
+
+
+_patch_group_author_username()
+
+
 class BotPyClient(botpy.Client):
     def __init__(self, appid: str, secret: str, on_message, sandbox: bool = False):
         # 只订阅「群聊与单聊」事件（GROUP_AND_C2C_EVENT）。多带未授权的
         # intent（如 GUILD_MESSAGES）会被网关以 op=9 Invalid Session 断连。
         intents = botpy.Intents(public_messages=True)
-        super().__init__(intents=intents, is_sandbox=sandbox)
+        # bot_log=None + ext_handlers=False：botpy 不再自己写 botpy.log，其日志改为向 root
+        # 传播，统一由 main._setup_logging() 的 handler 落到 logs/bot.log。
+        super().__init__(
+            intents=intents,
+            is_sandbox=sandbox,
+            bot_log=None,
+            ext_handlers=False,
+        )
         self._appid = appid
         self._secret = secret
         self.on_message = on_message
+        # 官方平台没有成员信息查询接口，昵称只能从消息事件里攒（见 _handle_group）
+        self._names: dict[str, str] = {}
 
     async def on_ready(self):
         logger.info(f"已连接官方平台，机器人：{self.robot.name}")
@@ -72,6 +103,10 @@ class BotPyClient(botpy.Client):
     async def _handle_group(self, message: GroupMessage):
         group_id = message.group_openid
         user_id = message.author.member_openid
+        # 官方平台无成员信息接口，收到消息顺手把昵称攒下来，供 get_group_member_name 用
+        name = getattr(message.author, "username", None)
+        if name:
+            self._names[user_id] = name
         # GROUP_AT_MESSAGE_CREATE 的 content 已去掉 @ 部分；GROUP_MESSAGE_CREATE（全量
         # 模式）不剥，需手动去掉行首 @ 前缀，否则 "@机器人名 /help" 匹配不到命令。
         text = _AT_PREFIX.sub("", (message.content or "").strip()).strip()
@@ -96,6 +131,13 @@ class BotPyClient(botpy.Client):
     async def send_group_msg(self, group_id: str, text: str):
         """群发纯文本（msg_type=0）"""
         await self.api.post_group_message(group_openid=group_id, msg_type=0, content=text)
+
+    async def get_group_member_name(self, group_id: str, user_id: str) -> str:
+        """返回该成员昵称；没有成员信息接口，只能靠历史消息里攒的 username，兜底返回 user_id。"""
+        return self._names.get(user_id) or str(user_id)
+
+    async def stop(self):
+        await self.close()
 
     async def start(self):  # noqa: D401 - 保持 main.py 的 await client.start() 形式
         await super().start(appid=self._appid, secret=self._secret)

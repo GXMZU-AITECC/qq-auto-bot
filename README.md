@@ -1,11 +1,11 @@
 # 🤖 qq-auto-bot · sandbox（自由实验分支）
 
-本分支是 qq-auto-bot 的**常驻实验分支**：一套现成的 QQ 机器人框架（LLOneBot + Python），
+本分支是 qq-auto-bot 的**常驻实验分支**：一套现成的 QQ 机器人框架（官方 QQ 机器人平台 botpy + Python），
 想做什么功能就做什么功能，**尽情玩，不影响生产**。
 
 - 生产代码在 `main` / `develop`，本分支**永不合并回去**。
 - 这里只有「基础 API」（连 QQ、收发消息、功能自动发现），**不含任何业务功能**。
-- 玩成熟的好点子，再另提 PR 搬进生产。
+- 好点子由维护者评估是否移植到生产；**贡献者不直接向 `main` / `develop` 提代码**。
 
 ## 一、获取代码
 
@@ -37,7 +37,7 @@ git switch sandbox
 
 你只管写自己的功能，其余框架都包了：
 
-- 连接 QQ（LLOneBot，OneBot v11）
+- 连接 QQ（官方 QQ 机器人平台，botpy）
 - 收群消息、发群消息 / 私聊
 - 按命令路由到你的处理函数（精确匹配 + 正则匹配）
 - **内置 `/help`**：群里发 `/help` 自动列出所有已注册的命令
@@ -80,7 +80,7 @@ pip install -r requirements.txt
    git switch -c feature/myfeature
    ```
 
-2. 写功能，只改 `features/` 和 `configs/`，**别动基础 API**（`main.py` / `bot.py` / `config.py` / `features/__init__.py`）。
+2. 写功能，只改 `features/` 和 `configs/`，**别动基础 API**（`main.py` / `bot_official.py` / `config.py` / `features/__init__.py`）。
 3. 提交并推送：
 
    ```bash
@@ -96,7 +96,7 @@ pip install -r requirements.txt
 ## 六、目录结构
 
 ```
-config.yaml          ← 全局配置
+config.yaml.example  ← 配置模板（复制成 config.yaml；config.yaml 不入库）
 configs/             ← 各功能配置
 features/            ← 你的功能都放这（自动发现）
   demo/              ← 范例功能
@@ -104,7 +104,7 @@ resources/           ← 功能要发的图片放这
 docs/                ← 文档
 tests/               ← 单元测试
 main.py              ← 启动入口（别改）
-bot.py               ← 连 QQ（别改）
+bot_official.py      ← 连 QQ（别改）
 config.py            ← 读配置（别改）
 ```
 
@@ -113,7 +113,6 @@ config.py            ← 读配置（别改）
 - [`docs/sandbox.md`](docs/sandbox.md) — 本分支的定位、玩法与约定
 - [`docs/development.md`](docs/development.md) — 新手入门：3 步加新功能
 - [`docs/api.md`](docs/api.md) — 框架 API 速查
-- [`docs/qqbot-api.md`](docs/qqbot-api.md) — QQ 机器人 API 速查
 
 ## 许可证
 

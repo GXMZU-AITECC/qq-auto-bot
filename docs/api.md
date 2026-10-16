@@ -30,7 +30,7 @@ async def 函数名(bot, group_id: str, user_id: str, text: str) -> str | None:
 
 ---
 
-## 🤖 bot 对象（bot.py）
+## 🤖 bot 对象
 
 发消息和查信息全靠它。
 
@@ -44,28 +44,11 @@ await bot.send_group_msg("123456789", "你好")
 
 ### `bot.get_group_member_name(group_id, user_id)`
 
-获取群成员昵称（优先群名片，其次 QQ 昵称）。
+获取群成员昵称（官方平台无成员接口，返回消息里攒到的昵称，兜底返回 `user_id`）。
 
 ```python
 name = await bot.get_group_member_name("123456789", "10001")
 # → "张三"
-```
-
-### `bot.image(name)`
-
-返回 `resources/` 里图片的 CQ 码，直接 `return` 即发送。
-
-```python
-async def cmd_pic(bot, group_id, user_id, text):
-    return bot.image("hello.png")   # 图片放 resources/hello.png
-```
-
-### `bot._api_call(action, params)`
-
-直接调 OneBot API（一般用不到）。
-
-```python
-await bot._api_call("set_group_card", {"group_id": 123, "user_id": 456, "card": "新名片"})
 ```
 
 ---
@@ -78,8 +61,8 @@ await bot._api_call("set_group_card", {"group_id": 123, "user_id": 456, "card": 
 
 ```python
 from config import get
-ws = get("llonebot", "ws_url")                    # → "ws://127.0.0.1:3001"
-file = get("data", "file", default="data.db")      # 取不到时返回默认值
+level = get("log", "level")                        # → "INFO"
+sandbox = get("qqbot", "sandbox", default=False)   # 取不到时返回默认值
 ```
 
 ### `load_feature_config(name)`

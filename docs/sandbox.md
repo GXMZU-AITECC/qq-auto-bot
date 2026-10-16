@@ -6,7 +6,7 @@
 
 - **零业务**：只有基础 API（连 QQ、收发消息、功能自动发现），没有任何现成业务功能。
 - **只进不出**：你可以往 `sandbox` 提任何功能；但 `sandbox` **永不合并回** `main` / `develop`。
-- **同一套基础代码**：从 `develop` 切出，框架与 API 跟生产完全一致，写出来的功能将来能直接搬去生产。
+- **基础 API 与生产分叉**：本线连的是**官方 QQ 机器人平台（botpy）**，生产（`main` / `develop`）连 LLOneBot。写 `features/` 的契约一致，纯文本功能可直接搬去生产；用到平台专属能力的需适配。
 
 生产 = `main` + `develop`，与 `sandbox` 互不影响。
 
@@ -38,17 +38,21 @@
 
 ## 约定（护栏）
 
-- **别改基础 API**：`main.py` / `bot.py` / `config.py` / `features/__init__.py` 由维护者统一维护；你的 PR 只碰 `features/` 和 `configs/`。
+- **别改基础 API**：`main.py` / `bot_official.py` / `config.py` / `features/__init__.py` 由维护者统一维护；你的 PR 只碰 `features/` 和 `configs/`。
 - **命令加前缀**：用 `/play` 之类的前缀，避免和将来的生产指令撞名。
 - **默认关闭**：功能配置里以 `enabled: false` 起手，想用时再开。
 
-## 基础 API 怎么更新
+## 基础 API 怎么维护
 
-`sandbox` 与 `develop` 是两条独立的线。当 `develop` 更新了基础 API（框架 / `bot.py` / `config.py` 等），**由维护者把同样的改动也提交到 `sandbox`**，即"**改 API 时两边一起改**"。
+`sandbox` 线与 `main` / `develop` 是**完全独立的两条线，基础 API 已分叉**：
 
-- 为什么手动：自动同步容易把业务代码也带过来；手动最干净。
-- 代价：靠纪律，改动多时别漏。
+- 本线：官方 QQ 机器人平台（botpy），客户端是 `bot_official.py`。
+- 生产：LLOneBot（客户端 `bot.py`），**不在本线**。
+
+因此**两边的基础 API 各自维护、互不同步**——本线的框架改动只在本线内流转（`feature/*` → `sandbox`），不会也不该回灌生产。
 
 ## 好点子怎么上生产
 
-`sandbox` 里玩成熟的功能，**另提一个正式 PR 进 `develop`**（不是合并 `sandbox`），走生产的评审流程。
+**贡献者不直接向生产分支（`main` / `develop`）提代码**——生产代码只由维护者维护。
+
+`sandbox` 里玩成熟的好点子，交给维护者评估：**是否移植、怎么移植由维护者决定**，你不必、也不要自己去开生产 PR。

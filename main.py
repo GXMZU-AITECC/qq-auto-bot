@@ -4,7 +4,7 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-from bot import OneBotClient
+from bot_official import BotPyClient
 from config import get
 from features import discover, dispatch
 
@@ -30,7 +30,10 @@ def _setup_logging():
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
 
+    # 先清掉已有 root handler——botpy 在 import 时 logging.basicConfig() 会加一个，
+    # 不清的话控制台会重复打印
     root = logging.getLogger()
+    root.handlers.clear()
     root.setLevel(level)
     root.addHandler(file_handler)
     root.addHandler(console_handler)
@@ -45,30 +48,25 @@ async def on_message(bot, group_id: str, user_id: str, text: str):
 
 
 def _build_client():
-    """按配置选择后端：配了官方平台 appid/secret 就用 BotPyClient，否则用 LLOneBot。"""
+    """构造官方 QQ 机器人平台（botpy）客户端。"""
     appid = get("qqbot", "app_id", default="") or os.environ.get("QQBOT_APP_ID", "")
     secret = get("qqbot", "secret", default="") or os.environ.get("QQBOT_APP_SECRET", "")
-
-    if appid and secret:
-        from bot_official import BotPyClient
-
-        logger.info("使用官方 QQ 机器人平台（botpy）")
-        client = BotPyClient(
-            appid=appid,
-            secret=secret,
-            sandbox=get("qqbot", "sandbox", default=True),
-            on_message=on_message,
+    if not (appid and secret):
+        raise RuntimeError(
+            "未配置官方平台凭据：请在 config.yaml 填 qqbot.app_id / qqbot.secret，"
+            "或设环境变量 QQBOT_APP_ID / QQBOT_APP_SECRET"
         )
-        # botpy 在 Client 初始化时把自己的 logger 钉死在 INFO，构造后按我们的配置同步
-        logging.getLogger("botpy").setLevel(get("log", "level", default="INFO"))
-        return client
 
-    logger.info("使用 LLOneBot（OneBot v11）")
-    return OneBotClient(
-        ws_url=get("llonebot", "ws_url", default="ws://127.0.0.1:3001"),
-        http_url=get("llonebot", "http_url", default="http://127.0.0.1:3000"),
+    logger.info("使用官方 QQ 机器人平台（botpy）")
+    client = BotPyClient(
+        appid=appid,
+        secret=secret,
+        sandbox=get("qqbot", "sandbox", default=True),
         on_message=on_message,
     )
+    # botpy 在 Client 初始化时把自己的 logger 钉死在 INFO，构造后按我们的配置同步
+    logging.getLogger("botpy").setLevel(get("log", "level", default="INFO"))
+    return client
 
 
 async def main():

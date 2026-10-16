@@ -8,18 +8,13 @@ __pycache__/
 # 数据文件
 data/
 logs/
-botpy.log*
 
 # 本地配置(不入库)
+config.yaml
 configs/*.local.yaml
 
 # Node
 node_modules/
-
-# 运行时环境
-overflow-1.0.8/
-LLOneBot-win-x64-ffmpeg/
-jdk-*.exe
 
 # 旧目录
 my-python-plugin/
