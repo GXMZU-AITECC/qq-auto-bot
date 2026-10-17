@@ -1,0 +1,3 @@
+# 抽卡功能配置
+# 设为 true 启用，false 禁用
+enabled: true
