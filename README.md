@@ -5,7 +5,7 @@
 
 - 生产代码在 `main` / `develop`，本分支**永不合并回去**。
 - 这里只有「基础 API」（连 QQ、收发消息、功能自动发现），**不含任何业务功能**。
-- 玩成熟的好点子，再另提 PR 搬进生产。
+- 好点子由维护者评估是否移植到生产；**贡献者不直接向 `main` / `develop` 提代码**。
 
 ## 一、获取代码
 
@@ -80,7 +80,7 @@ pip install -r requirements.txt
    git switch -c feature/myfeature
    ```
 
-2. 写功能，只改 `features/` 和 `configs/`，**别动基础 API**（`main.py` / `bot.py` / `config.py` / `features/__init__.py`）。
+2. 写功能（`features/` + `configs/`）；**缺接口时可以改基础 API**（`main.py` / `bot.py` / `config.py` / `features/__init__.py`），在 PR 里说明原因即可。
 3. 提交并推送：
 
    ```bash
@@ -103,9 +103,9 @@ features/            ← 你的功能都放这（自动发现）
 resources/           ← 功能要发的图片放这
 docs/                ← 文档
 tests/               ← 单元测试
-main.py              ← 启动入口（别改）
-bot.py               ← 连 QQ（别改）
-config.py            ← 读配置（别改）
+main.py              ← 启动入口
+bot.py               ← 连 QQ
+config.py            ← 读配置
 ```
 
 ## 七、文档

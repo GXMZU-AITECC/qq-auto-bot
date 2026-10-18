@@ -6,7 +6,7 @@
 
 - **零业务**：只有基础 API（连 QQ、收发消息、功能自动发现），没有任何现成业务功能。
 - **只进不出**：你可以往 `sandbox` 提任何功能；但 `sandbox` **永不合并回** `main` / `develop`。
-- **同一套基础代码**：从 `develop` 切出，框架与 API 跟生产完全一致，写出来的功能将来能直接搬去生产。
+- **基础代码独立**：从 `develop` 切出后，基础 API 在本线自行维护，与生产**互不同步**。
 
 生产 = `main` + `develop`，与 `sandbox` 互不影响。
 
@@ -31,24 +31,23 @@
    git switch -c feature/myfeature
    ```
 
-3. 写功能，只放在 `features/<名>/`（配套配置放 `configs/<名>.yaml`）。
+3. 写功能优先放在 `features/<名>/`（配套配置放 `configs/<名>.yaml`）；确有需要也可以改基础 API。
 4. 推送并**向 `sandbox` 提 PR**（base 选 `sandbox`），**CI 通过即可合并**。
 
 > 所有改动都走 PR 合并进 `sandbox`，不要直接推 `sandbox`。
 
 ## 约定（护栏）
 
-- **别改基础 API**：`main.py` / `bot.py` / `config.py` / `features/__init__.py` 由维护者统一维护；你的 PR 只碰 `features/` 和 `configs/`。
+- **基础 API 可以改**：`main.py` / `bot.py` / `config.py` / `features/__init__.py` 不是禁区——现有接口缺功能时，可以直接改或新增；尽量别破坏已有用法，并在 PR 里说明改了什么、为什么。
 - **命令加前缀**：用 `/play` 之类的前缀，避免和将来的生产指令撞名。
-- **默认关闭**：功能配置里以 `enabled: false` 起手，想用时再开。
+- **功能开关**：`configs/<功能>.yaml` 用 `enabled` 控制启停，`true` 直接启用、`false` 关闭；新功能可以直接 `enabled: true`。
 
-## 基础 API 怎么更新
+## 基础 API 怎么维护
 
-`sandbox` 与 `develop` 是两条独立的线。当 `develop` 更新了基础 API（框架 / `bot.py` / `config.py` 等），**由维护者把同样的改动也提交到 `sandbox`**，即"**改 API 时两边一起改**"。
-
-- 为什么手动：自动同步容易把业务代码也带过来；手动最干净。
-- 代价：靠纪律，改动多时别漏。
+`sandbox` 与 `develop` 是两条独立的线，基础 API 各自维护、互不同步。功能开发需要但框架没有的接口，可以直接在 `sandbox` 线补上，和功能改动放在同一个 PR 里即可。
 
 ## 好点子怎么上生产
 
-`sandbox` 里玩成熟的功能，**另提一个正式 PR 进 `develop`**（不是合并 `sandbox`），走生产的评审流程。
+**贡献者不直接向生产分支（`main` / `develop`）提代码**——生产代码只由维护者维护。
+
+`sandbox` 里玩成熟的好点子，交给维护者评估：**是否移植、怎么移植由维护者决定**，你不必、也不要自己去开生产 PR。
