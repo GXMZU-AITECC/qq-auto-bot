@@ -9,7 +9,7 @@
 
 ## 自查清单
 - [ ] 新增功能放在 `features/<名>/`，配套配置放 `configs/<名>.yaml`
-- [ ] 没有改动基础 API（`main.py` / `bot.py` / `config.py` / `features/__init__.py`）
+- [ ] 若改动了基础 API（`main.py` / `bot.py` / `config.py` / `features/__init__.py`），已在「改动」中说明原因
 - [ ] diff 内无密钥、令牌、账号口令、个人数据
 - [ ] 无夹带的无关改动 / 构建产物 / 日志 / 依赖目录
 - [ ] 目标分支为 `sandbox`

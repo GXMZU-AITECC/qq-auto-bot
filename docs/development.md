@@ -22,9 +22,9 @@ configs/            ← 各功能配置文件
 features/           ← 各功能代码
   demo/             ← 范例功能
 tests/              ← 单元测试（pytest）
-main.py             ← 启动入口（没有特殊需求不要改）
-bot.py              ← LLOneBot 连接（不要改）
-config.py           ← 配置读取工具（不要改）
+main.py             ← 启动入口（缺功能可扩展）
+bot.py              ← LLOneBot 连接（缺接口可扩展）
+config.py           ← 配置读取工具（缺接口可扩展）
 ```
 
 ---
