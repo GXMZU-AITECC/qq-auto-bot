@@ -8,6 +8,9 @@
 - COMMAND_PATTERNS = {r"^关键词.+$": async_handler, ...}
 - handler 签名: async def handler(bot, group_id, user_id, text) -> str | None
   text 是原始消息全文（用不到可以忽略），返回字符串则自动发送，返回 None 则静默
+- 可选导出 POKE_HANDLERS 列表（戳一戳处理器）
+- POKE_HANDLERS = [async_handler, ...]
+- poke handler 签名: async def handler(bot, group_id, user_id, target_id) -> str | None
 
 内置命令:
 - /help 列出所有已注册的命令（精确命令 + 正则命令），无需自己实现，且不可被功能覆盖。
@@ -23,6 +26,7 @@ logger = logging.getLogger("features")
 
 _commands: dict[str, Callable] = {}
 _patterns: list[tuple[re.Pattern, Callable]] = []
+_poke_handlers: list[Callable] = []
 
 HELP_CMD = "/help"  # 内置命令，保留名，功能不可覆盖
 
@@ -36,10 +40,11 @@ def _help_text() -> str:
 
 
 def discover():
-    """扫描 features/ 下所有模块，收集 COMMANDS 与 COMMAND_PATTERNS"""
-    global _commands, _patterns
+    """扫描 features/ 下所有模块，收集 COMMANDS、COMMAND_PATTERNS 与 POKE_HANDLERS"""
+    global _commands, _patterns, _poke_handlers
     _commands.clear()
     _patterns.clear()
+    _poke_handlers.clear()
 
     for _, name, ispkg in pkgutil.iter_modules(__path__):
         if not ispkg:
@@ -62,10 +67,16 @@ def discover():
                     continue
                 _patterns.append((compiled, handler))
                 logger.info(f"注册正则命令 [{pat}] ← features/{name}")
+            for handler in getattr(mod, "POKE_HANDLERS", []):
+                _poke_handlers.append(handler)
+                logger.info(f"注册 poke 处理器 ← features/{name}")
         except Exception as e:
             logger.error(f"加载 features/{name} 失败: {e}")
 
-    logger.info(f"共注册 {len(_commands)} 条命令、{len(_patterns)} 条正则命令")
+    logger.info(
+        f"共注册 {len(_commands)} 条命令、{len(_patterns)} 条正则命令、"
+        f"{len(_poke_handlers)} 个 poke 处理器"
+    )
 
 
 async def _run(handler: Callable, bot, group_id: str, user_id: str, src: str) -> str | None:
@@ -90,3 +101,21 @@ async def dispatch(bot, group_id: str, user_id: str, text: str) -> str | None:
             return await _run(handler, bot, group_id, user_id, text)
 
     return None  # 没有匹配的命令，静默
+
+
+async def dispatch_poke(bot, group_id: str, user_id: str, target_id: str) -> str | None:
+    """路由戳一戳事件：依次调用所有已注册的 poke 处理器，返回第一条非空回复
+
+    与 dispatch 不同，这里不走 _run：_run 出错时会返回「命令执行出错: ...」，
+    而戳一戳是 notice 事件，出错文案会被当成回复发到群里。所以这里只记日志、跳过。
+    """
+    for handler in _poke_handlers:
+        try:
+            reply = await handler(bot, group_id, user_id, target_id)
+        except Exception as e:
+            name = getattr(handler, "__name__", repr(handler))
+            logger.exception(f"执行 poke 处理器 {name} 异常: {e}")
+            continue
+        if reply:
+            return reply
+    return None

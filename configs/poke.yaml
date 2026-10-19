@@ -1,0 +1,26 @@
+# 戳一戳功能配置
+# 设为 true 启用，false 禁用
+enabled: true
+
+# 被戳时的反应：poke_back_chance 的概率反戳回去（30%），
+# 剩下的概率（1 - poke_back_chance = 70%）回一句话（从下面的 replies 里随机挑一条）
+# 两者互斥：每次被戳只会「反戳」或「回话」其中一种，不会同时发生
+poke_back_chance: 0.3
+
+# 回复话术列表，每条被挑中的概率 = (1 - poke_back_chance) ÷ 条数
+# 例：10 条 → 0.7 ÷ 10 = 7%；5 条 → 0.7 ÷ 5 = 14%
+replies:
+  - "刘哥叫你别玩啦!!!"
+  - "再戳就在你代码里留个 bug"
+  - "戳一次掉 1 万 token"
+  - "xwms说本周汇报你来写"
+  - "戳一戳收到，正在假装很忙"
+
+# 被戳死机制：window_seconds 秒内整个群被戳满 threshold 次
+# → 先回一句 spam_reply（"被戳死了"），然后倒地 cooldown_seconds 秒
+# 倒地期间：不反戳、不回话，完全静默；时间一到自动"复活"，重新开始计数
+# 注意：spam_reply 文案里的秒数，记得和 spam_cooldown_seconds 保持一致
+spam_window_seconds: 60
+spam_threshold: 15
+spam_cooldown_seconds: 30
+spam_reply: "被戳死了……30 秒后复活"

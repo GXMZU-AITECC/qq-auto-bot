@@ -14,10 +14,11 @@ _RESOURCES = Path(__file__).resolve().parent / "resources"
 class OneBotClient:
     """连接 LLOneBot 的客户端，收消息 + 发 API 请求"""
 
-    def __init__(self, ws_url: str, http_url: str, on_message):
+    def __init__(self, ws_url: str, http_url: str, on_message, on_poke=None):
         self.ws_url = ws_url
         self.http_url = http_url.rstrip("/")
         self.on_message = on_message
+        self.on_poke = on_poke
         self._ws: websockets.WebSocketClientProtocol | None = None
         self._http = httpx.AsyncClient(timeout=10)
         self._running = False
@@ -54,6 +55,10 @@ class OneBotClient:
     async def send_group_msg(self, group_id: str, text: str):
         """调用 LLOneBot HTTP API 发送群消息"""
         await self._api_call("send_group_msg", {"group_id": int(group_id), "message": text})
+
+    async def group_poke(self, group_id: str, user_id: str):
+        """戳一戳群成员（LLOneBot 的 group_poke）"""
+        await self._api_call("group_poke", {"group_id": int(group_id), "user_id": int(user_id)})
 
     def image(self, name: str) -> str:
         """返回 resources/ 里图片的 CQ 码，功能里直接 return bot.image("x.png")"""
@@ -92,6 +97,12 @@ class OneBotClient:
             msg_type = event.get("message_type")
             if msg_type == "group":
                 await self._handle_group_message(event)
+        elif post_type == "notice":
+            if event.get("notice_type") != "notify" or event.get("sub_type") != "poke":
+                return
+            if str(event.get("target_id", "")) != str(event.get("self_id", "")):
+                return
+            await self._handle_poke(event)
 
     async def _handle_group_message(self, event: dict):
         group_id = str(event.get("group_id", ""))
@@ -104,6 +115,17 @@ class OneBotClient:
         # 调用外部处理函数
         if self.on_message:
             await self.on_message(self, group_id, user_id, text.strip())
+
+    async def _handle_poke(self, event: dict):
+        """处理戳一戳事件：user_id 戳了 target_id"""
+        group_id = str(event.get("group_id", ""))
+        user_id = str(event.get("user_id", ""))
+        target_id = str(event.get("target_id", ""))
+
+        logger.info(f"[群:{group_id}] {user_id} 戳了 {target_id}")
+
+        if self.on_poke:
+            await self.on_poke(self, group_id, user_id, target_id)
 
 
 def _extract_text(msgs: list) -> str:
