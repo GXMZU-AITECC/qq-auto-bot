@@ -13,7 +13,10 @@ replies:
   - "刘哥叫你别玩啦!!!"
   - "再戳就在你代码里留个 bug"
   - "戳一次掉 1 万 token"
-  - "xwms说本周汇报你来写"
+  - |-
+    大鹏一日同风起，扶摇直上九万里
+    A roc rose with the wind one day,
+    Up to the ninth sphere it did stray.
   - "戳一戳收到，正在假装很忙"
 
 # 被戳死机制：window_seconds 秒内整个群被戳满 threshold 次
