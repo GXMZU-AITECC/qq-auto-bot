@@ -19,8 +19,8 @@ replies:
 # 被戳死机制：window_seconds 秒内整个群被戳满 threshold 次
 # → 先回一句 spam_reply（"被戳死了"），然后倒地 cooldown_seconds 秒
 # 倒地期间：不反戳、不回话，完全静默；时间一到自动"复活"，重新开始计数
-# 注意：spam_reply 文案里的秒数，记得和 spam_cooldown_seconds 保持一致
+# spam_reply 里的 {seconds} 会自动替换成 spam_cooldown_seconds，不用手改
 spam_window_seconds: 60
 spam_threshold: 15
 spam_cooldown_seconds: 30
-spam_reply: "被戳死了……30 秒后复活"
+spam_reply: "被戳死了……{seconds} 秒后复活"

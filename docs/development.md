@@ -71,6 +71,9 @@ COMMAND_PATTERNS = {
 }
 ```
 
+> 想响应**戳一戳**这类 notice 事件（不是聊天消息）时，导出 `POKE_HANDLERS = [handler]`，
+> 签名是 `(bot, group_id, user_id, target_id)`，完整例子见 `features/poke/handler.py`。
+
 **第 3 步：** 写配置（可选）
 
 ```yaml
@@ -170,8 +173,9 @@ python -c "from features import discover, _commands, _patterns; discover(); prin
 
 ## ⚠️ 注意事项
 
-- 每步功能里，**有 `COMMANDS`（精确）或 `COMMAND_PATTERNS`（正则）才会被自动发现**
+- 每步功能里，**有 `COMMANDS`（精确）、`COMMAND_PATTERNS`（正则）或 `POKE_HANDLERS`（notice 事件）才会被自动发现**
+- 响应戳一戳这类 notice 事件时导出 `POKE_HANDLERS = [handler]`，签名 `(bot, group_id, user_id, target_id)`；戳一戳不是聊天消息，不能用 `COMMANDS` 接
 - handler 函数必须是 `async`
 - 所有 handler 签名：`(bot, group_id, user_id, text)`，`text` 是原始消息全文（用不到就忽略）
 - 返回 `None` 或空字符串 = 不回复
-- `bot` 可用的函数：`bot.send_group_msg(群号, 内容)`、`bot.get_group_member_name(群号, QQ号)`
+- `bot` 可用的函数：`bot.send_group_msg(群号, 内容)`、`bot.get_group_member_name(群号, QQ号)`、`bot.group_poke(群号, QQ号)`
