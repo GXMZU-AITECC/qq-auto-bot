@@ -20,6 +20,17 @@ logger = logging.getLogger("features.poke")
 _recent: dict[str, list[float]] = {}
 # 群号 -> 冷却到期时刻（time.monotonic 的刻度）
 _cooldown_until: dict[str, float] = {}
+# (配置字段, 原始值) -> 已提示过；同一个错值只 warning 一次，避免每次被戳都刷日志
+_warned: set[tuple[str, str]] = set()
+
+
+def _warn_config(key: str, raw, message: str) -> None:
+    """同一个配置项、同一个错值只提示一次。"""
+    token = (key, repr(raw))
+    if token in _warned:
+        return
+    _warned.add(token)
+    logger.warning(message)
 
 
 def _cfg_number(cfg: dict, key: str, default, cast=float, minimum=None, maximum=None):
@@ -32,16 +43,26 @@ def _cfg_number(cfg: dict, key: str, default, cast=float, minimum=None, maximum=
     try:
         value = cast(raw)
     except (TypeError, ValueError):
-        logger.warning(
+        _warn_config(
+            key,
+            raw,
             f"configs/poke.yaml 的 {key} 不是合法 {cast.__name__}（{raw!r}），"
-            f"回退默认值 {default}"
+            f"回退默认值 {default}",
         )
         return default
     if minimum is not None and value < minimum:
-        logger.warning(f"configs/poke.yaml 的 {key}={value} 小于 {minimum}，回退默认值 {default}")
+        _warn_config(
+            key,
+            raw,
+            f"configs/poke.yaml 的 {key}={value} 小于 {minimum}，回退默认值 {default}",
+        )
         return default
     if maximum is not None and value > maximum:
-        logger.warning(f"configs/poke.yaml 的 {key}={value} 大于 {maximum}，回退默认值 {default}")
+        _warn_config(
+            key,
+            raw,
+            f"configs/poke.yaml 的 {key}={value} 大于 {maximum}，回退默认值 {default}",
+        )
         return default
     return value
 
@@ -67,8 +88,12 @@ def _render_spam_reply(cfg: dict, cooldown: float) -> str | None:
         return None
     try:
         return str(template).format(seconds=int(cooldown))
-    except (KeyError, IndexError, ValueError):
-        logger.warning(f"configs/poke.yaml 的 spam_reply 占位符无法识别，按原样发送：{template!r}")
+    except (KeyError, IndexError, ValueError, AttributeError, TypeError):
+        _warn_config(
+            "spam_reply",
+            template,
+            f"configs/poke.yaml 的 spam_reply 占位符无法识别，按原样发送：{template!r}",
+        )
         return str(template)
 
 
@@ -126,6 +151,9 @@ async def handle_poke(bot, group_id, user_id, target_id):
         return None
 
     replies = cfg.get("replies") or []
+    if not isinstance(replies, list):
+        _warn_config("replies", replies, "configs/poke.yaml 的 replies 应该是列表，已忽略")
+        replies = []
     if replies:
         return random.choice(replies)
 

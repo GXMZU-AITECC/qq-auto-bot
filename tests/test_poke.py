@@ -43,6 +43,7 @@ def _clean_state():
     """每个用例前清空模块级状态，避免互相影响"""
     poke._recent.clear()
     poke._cooldown_until.clear()
+    poke._warned.clear()
     yield
 
 
@@ -238,6 +239,31 @@ def test_戳死台词占位符写错时原样发送(monkeypatch):
     assert asyncio.run(handle_poke(bot, "111", "222", "333")) == "被戳死了……{second} 秒后复活"
 
 
+def test_戳死台词属性访问写错时原样发送(monkeypatch):
+    """{seconds.foo} / {seconds[0]} 会抛 AttributeError / TypeError，同样要兜住"""
+    templates = ["被戳死了……{seconds.foo} 秒后复活", "被戳死了……{seconds[0]} 秒后复活"]
+    for i, tpl in enumerate(templates):
+        _patch(monkeypatch, spam_threshold=1, spam_reply=tpl)
+        bot = FakeBot()
+        _freeze_time(monkeypatch)
+        # 每个模板用不同群号，避免上一轮的冷却影响这一轮
+        assert asyncio.run(handle_poke(bot, str(100 + i), "222", "333")) == tpl
+
+
+def test_配置写错只提示一次(monkeypatch, caplog):
+    """每次被戳都会重新读配置，但同一个错值只该 warning 一次，避免刷日志"""
+    _patch(monkeypatch, spam_threshold="很多")
+    monkeypatch.setattr(poke.random, "random", lambda: 0.0)
+    bot = FakeBot()
+    _freeze_time(monkeypatch)
+
+    with caplog.at_level("WARNING", logger="features.poke"):
+        for _ in range(3):
+            asyncio.run(handle_poke(bot, "111", "222", "333"))
+
+    assert caplog.text.count("spam_threshold") == 1
+
+
 def test_冷却结束的群会被清理(monkeypatch):
     """倒地结束后该群状态应被清掉，字典不随群数无限增长"""
     _patch(monkeypatch, spam_threshold=1, spam_cooldown_seconds=5)
@@ -266,4 +292,15 @@ def test_窗口内已无记录的群会被清理(monkeypatch):
     clock["t"] = 200  # 远超 60 秒窗口
     asyncio.run(handle_poke(bot, "222", "222", "333"))
     assert "111" not in poke._recent
+
+def test_replies_写成字符串时忽略并提示(monkeypatch, caplog):
+    """replies 本该是列表，写成字符串时不能返回单个字"""
+    _patch(monkeypatch, poke_back_chance=0.0, replies="别戳了")
+    bot = FakeBot()
+    _freeze_time(monkeypatch)
+
+    with caplog.at_level("WARNING", logger="features.poke"):
+        assert asyncio.run(handle_poke(bot, "111", "222", "333")) is None
+
+    assert "replies" in caplog.text
 
