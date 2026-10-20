@@ -6,7 +6,7 @@ from logging.handlers import RotatingFileHandler
 
 from bot import OneBotClient
 from config import get
-from features import discover, dispatch
+from features import discover, dispatch, dispatch_poke
 
 
 def _setup_logging():
@@ -45,6 +45,12 @@ async def on_message(bot: OneBotClient, group_id: str, user_id: str, text: str):
         await bot.send_group_msg(group_id, reply)
 
 
+async def on_poke(bot: OneBotClient, group_id: str, user_id: str, target_id: str):
+    reply = await dispatch_poke(bot, group_id, user_id, target_id)
+    if reply:
+        await bot.send_group_msg(group_id, reply)
+
+
 async def main():
     discover()
     logger.info("启动 QQ 机器人...")
@@ -52,6 +58,7 @@ async def main():
         ws_url=get("llonebot", "ws_url", default="ws://127.0.0.1:3001"),
         http_url=get("llonebot", "http_url", default="http://127.0.0.1:3000"),
         on_message=on_message,
+        on_poke=on_poke,
     )
 
     try:
