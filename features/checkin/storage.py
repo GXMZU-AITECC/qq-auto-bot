@@ -1,3 +1,5 @@
+import random
+import re
 import sqlite3
 import os
 from datetime import datetime, timedelta
@@ -18,7 +20,7 @@ def _parse_hhmm(s: str) -> int:
     return h * 60 + m
 
 
-def _shifts() -> list[dict]:
+def shifts() -> list[dict]:
     """读取班次配置。到岗即结算。
 
     每个班次:
@@ -50,7 +52,7 @@ def _current_shift() -> dict | None:
     """根据当前时间匹配签到窗口(到岗 ~ 班次结束)"""
     now = _now()
     t = now.hour * 60 + now.minute
-    for s in _shifts():
+    for s in shifts():
         if s["arrive_m"] <= t < s["leave_m"]:
             return s
     return None
@@ -151,6 +153,74 @@ def checkin(group_id: str, user_id: str, user_name: str = "", hours: int | None 
             f"签到成功! {shift['name']} +{_format_duration(credit)}\n"
             f"今日: {_format_duration(today_sum)}\n"
             f"累计: {_format_duration(total_sum)}"
+        )
+    finally:
+        conn.close()
+
+
+# ---- 补签 ----
+
+def parse_shift(period: str) -> tuple[dict, int]:
+    """解析补签的班次写法，返回 (班次, 录入时长)。
+
+    固定班次直接写名字；带 options_hours 的班次必须写「晚班2」这种形式。
+    """
+    period = (period or "").strip()
+    for s in shifts():
+        if s["name"] != period:
+            continue
+        if s["options"]:
+            opts = " / ".join(f"{s['name']}{n}" for n in s["options"])
+            raise ValueError(f"「{s['name']}」请带上时长，如 {opts}")
+        return s, s["hours"]
+
+    m = re.fullmatch(r"(.+?)(\d+)", period)
+    if m:
+        for s in shifts():
+            if s["name"] == m.group(1) and s["options"] and int(m.group(2)) in s["options"]:
+                return s, int(m.group(2))
+    raise ValueError("班次不存在，请参考补签说明里的班次格式。")
+
+
+def _makeup_time(shift: dict) -> str:
+    """在班次到岗后的随机窗口内取一个时间。"""
+    cfg = load_feature_config("checkin")
+    window = cfg.get("makeup_window_minutes", 15)
+    try:
+        window = max(0, int(window))
+    except (TypeError, ValueError):
+        window = 15
+
+    start_m = shift["arrive_m"]
+    end_m = min(start_m + window, shift["leave_m"])
+    span = max(0, end_m - start_m) * 60
+    seconds = start_m * 60 + (random.randrange(span) if span > 0 else 0)
+    return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}:{seconds % 60:02d}"
+
+
+def makeup(group_id: str, user_id: str, user_name: str, day: str, period: str) -> str:
+    """补录一条签到记录。"""
+    if not group_id or not user_id:
+        return "参数错误。"
+
+    shift, credit = parse_shift(period)
+    record_time = _makeup_time(shift)
+
+    conn = _get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO records "
+            "(group_id, user_id, user_name, date, period, duration, time) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (group_id, user_id, user_name, day, shift["name"], credit, record_time),
+        )
+        if cur.rowcount == 0:
+            return f"{user_name} 在 {day} 的「{shift['name']}」已有签到记录，不重复补签。"
+        conn.commit()
+        _cleanup(conn)
+        return (
+            f"补签成功：{user_name} {day} {shift['name']} "
+            f"+{_format_duration(credit)}（记录时间 {record_time}）"
         )
     finally:
         conn.close()
