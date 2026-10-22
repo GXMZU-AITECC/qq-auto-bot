@@ -354,3 +354,95 @@ def test_消息按注册顺序路由到正确的处理函数(monkeypatch):
     assert asyncio.run(派发("取消请假 一班次")) == "命中:取消"
     assert asyncio.run(派发("请假 一班次")) == "命中:请假"
     assert asyncio.run(派发("请假 明天 晚班 有事")) == "命中:请假"
+
+
+# ------------------------------------------------- 评审意见回归（PR #32 review @xwms）
+
+def test_原因里的晚上不会被当成晚班():
+    """「请假 一班次 晚上加班」只能登记一班次，原因保留，不能顺手多登一条晚班。"""
+    _, periods, reason, err = handler.parse_leave("请假 一班次 晚上加班", CHECKIN_CFG)
+    assert err == ""
+    assert periods == ["一班次"]
+    assert reason == "晚上加班"
+
+
+def test_只写晚上有事不给默认晚班():
+    _, periods, _, err = handler.parse_leave("请假 晚上有事", CHECKIN_CFG)
+    assert periods == []
+    assert err          # 应该提示没认出班次，而不是把「晚上有事」当班次、原因丢失
+
+
+@pytest.mark.parametrize(
+    ("写法", "期望"),
+    [("晚班", "晚班"), ("晚自修", "晚班"), ("晚自习", "晚班"), ("3班次", "三班次")],
+)
+def test_明确列出的别名才归一(写法, 期望):
+    names = [s["name"] for s in handler.shifts(CHECKIN_CFG)]
+    assert handler._norm_period(写法, names) == 期望
+
+
+@pytest.mark.parametrize("写法", ["晚上", "晚点来", "晚", "晚上开会"])
+def test_含糊的晚字开头不认(写法):
+    names = [s["name"] for s in handler.shifts(CHECKIN_CFG)]
+    assert handler._norm_period(写法, names) is None
+
+
+def test_取消请假班次名写错时不会清空当天():
+    """「取消请假 一版次」认不出班次 —— 绝不能当成「取消当天全部」。"""
+    今天 = handler._today().isoformat()
+    storage.add("100", "9001", "张三", 今天, "一班次")
+    storage.add("100", "9001", "张三", 今天, "二班次")
+    回复 = asyncio.run(handler.cancel_leave(FakeBot(), "100", "9001", "取消请假 一版次"))
+    assert "没认出" in 回复
+    assert len(storage.list_user_by_date("100", "9001", 今天)) == 2   # 一条都没删
+
+
+def test_取消请假不带班次才清空当天():
+    今天 = handler._today().isoformat()
+    storage.add("100", "9001", "张三", 今天, "一班次")
+    storage.add("100", "9001", "张三", 今天, "二班次")
+    回复 = asyncio.run(handler.cancel_leave(FakeBot(), "100", "9001", "取消请假"))
+    assert "已取消" in 回复
+    assert storage.list_user_by_date("100", "9001", 今天) == []
+
+
+def test_取消请假指定班次只删那一条():
+    今天 = handler._today().isoformat()
+    storage.add("100", "9001", "张三", 今天, "一班次")
+    storage.add("100", "9001", "张三", 今天, "二班次")
+    回复 = asyncio.run(handler.cancel_leave(FakeBot(), "100", "9001", "取消请假 一班次"))
+    assert "已取消" in 回复
+    assert [r["period"] for r in storage.list_user_by_date("100", "9001", 今天)] == ["二班次"]
+
+
+@pytest.mark.parametrize("坏日期", ["13-45", "2026-02-30", "99-99"])
+def test_日期写错时提示而不是按今天登记(坏日期):
+    """_take_day 要能分清「没写日期」和「日期非法」，后者不能静默按今天落库。"""
+    _, periods, _, err = handler.parse_leave(f"请假 {坏日期} 一班次", CHECKIN_CFG)
+    assert err and 坏日期 in err
+    assert periods == []
+
+
+def test_请假名单日期写错不崩():
+    回复 = asyncio.run(handler.leave_list(FakeBot(), "100", "9001", "请假名单 13-45"))
+    assert "13-45" in 回复
+
+
+def test_请假日期写错时不落库():
+    今天 = handler._today().isoformat()
+    回复 = asyncio.run(handler.ask_leave(FakeBot(), "100", "9001", "请假 13-45 一班次"))
+    assert "13-45" in 回复
+    assert storage.list_by_date("100", 今天) == []
+
+
+def test_配置缺省时功能关闭(monkeypatch):
+    """enabled 缺省 False，与 demo / schoolcalendar 一致：配置缺失不该意外启用。"""
+
+    def 没写_enabled(name):
+        return {"checkin": CHECKIN_CFG, "askleave": {"notify_before_minutes": 30}}.get(name, {})
+
+    monkeypatch.setattr(handler, "load_feature_config", 没写_enabled)
+    bot = FakeBot()
+    assert asyncio.run(handler.ask_leave(bot, "100", "9001", "请假 一班次")) is None
+    assert asyncio.run(handler.cancel_leave(bot, "100", "9001", "取消请假")) is None
+    assert asyncio.run(handler.leave_list(bot, "100", "9001", "请假名单")) is None
