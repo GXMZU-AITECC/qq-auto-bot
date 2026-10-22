@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import sqlite3
+from datetime import timedelta
 
 import pytest
 
@@ -20,13 +21,11 @@ SHIFT_CFG = {
 
 
 class FakeBot:
-    def __init__(self, result=None):
-        self.result = result
-        self.calls = []
+    def __init__(self, name="小明"):
+        self.name = name
 
-    async def _api_call(self, action, params):
-        self.calls.append((action, params))
-        return self.result
+    async def get_group_member_name(self, group_id, user_id):
+        return self.name
 
 
 @pytest.fixture
@@ -36,12 +35,8 @@ def env(monkeypatch, tmp_path):
     return tmp_path
 
 
-def _bot(*members):
-    return FakeBot({"status": "ok", "data": list(members)})
-
-
-def _run(bot, text, group_id="100", user_id="200"):
-    return asyncio.run(handler._makeup(bot, group_id, user_id, text))
+def _run(text, name="小明", user_id="200"):
+    return asyncio.run(handler._makeup(FakeBot(name), "100", user_id, text))
 
 
 def _rows():
@@ -63,28 +58,41 @@ def _secs(t: str) -> int:
 
 
 def test_只发补签返回说明(env):
-    reply = _run(_bot(), "补签")
-    assert "补签 姓名 日期 班次" in reply
-    assert "YYYY-MM-DD" in reply
+    reply = _run("补签")
+    assert "补签 日期 班次" in reply
+    assert "只能补自己的" in reply
+    assert "YYYY-MM-DD" in reply and "今天" in reply and "昨天" in reply
     assert "晚班2" in reply and "晚班3" in reply
-    assert "姓名#QQ" in reply
+
+
+def test_带姓名等多余参数返回说明(env):
+    reply = _run("补签 小明 2020-01-15 三班次")
+    assert "补签 日期 班次" in reply
+    assert _rows() == []
 
 
 def test_日期格式错误(env):
-    reply = _run(_bot(), "补签 小明 2026/10/18 三班次")
-    assert "日期格式不对" in reply
+    reply = _run("补签 2026/10/18 三班次")
+    assert "没认出日期" in reply
+    assert _rows() == []
+
+
+def test_只写日期提示带班次(env):
+    assert "请带上班次" in _run("补签 今天")
+    assert "请带上班次" in _run("补签 2020-01-15")
+    assert _rows() == []
 
 
 def test_未来日期被拒绝(env):
-    reply = _run(_bot({"user_id": 1, "card": "小明"}), "补签 小明 2999-12-31 三班次")
+    reply = _run("补签 2999-12-31 三班次")
     assert "未来日期" in reply
     assert _rows() == []
 
 
 def test_补签成功并落库(env):
-    reply = _run(_bot({"user_id": 10001, "card": "小明", "nickname": "m"}),
-                 "补签 小明 2020-01-15 三班次")
+    reply = _run("补签 2020-01-15 三班次", name="小明", user_id="10001")
     assert "补签成功" in reply
+    assert "操作人：小明" in reply
 
     rows = _rows()
     assert len(rows) == 1
@@ -99,9 +107,21 @@ def test_补签成功并落库(env):
     assert _secs("14:10:00") <= _secs(row["time"]) < _secs("14:25:00")
 
 
+def test_不写日期默认今天(env):
+    _run("补签 三班次")
+    assert _rows()[0]["date"] == handler._today().isoformat()
+
+
+@pytest.mark.parametrize("token,delta", [("今天", 0), ("昨天", -1)])
+def test_相对日期(env, token, delta):
+    _run(f"补签 {token} 三班次")
+    expect = (handler._today() + timedelta(days=delta)).isoformat()
+    assert _rows()[0]["date"] == expect
+
+
 @pytest.mark.parametrize("shift,hours", [("晚班2", 2), ("晚班3", 3)])
 def test_晚班带时长(env, shift, hours):
-    reply = _run(_bot({"user_id": 1, "card": "小明"}), f"补签 小明 2020-01-15 {shift}")
+    reply = _run(f"补签 2020-01-15 {shift}")
     assert "补签成功" in reply
     row = _rows()[0]
     assert row["period"] == "晚班"
@@ -115,74 +135,28 @@ def test_晚班带时长(env, shift, hours):
     ("五班次", "班次不存在"),
 ])
 def test_班次写法错误(env, shift, expected):
-    reply = _run(_bot({"user_id": 1, "card": "小明"}), f"补签 小明 2020-01-15 {shift}")
+    reply = _run(f"补签 2020-01-15 {shift}")
     assert expected in reply
     assert _rows() == []
 
 
-def test_重复补签只写一条(env):
-    bot = _bot({"user_id": 1, "card": "小明"})
-    first = _run(bot, "补签 小明 2020-01-15 三班次")
-    second = _run(bot, "补签 小明 2020-01-15 三班次")
+def test_重复补签不覆盖且带上原时间(env):
+    first = _run("补签 2020-01-15 三班次")
     assert "补签成功" in first
+    original = _rows()[0]
+    second = _run("补签 2020-01-15 三班次")
     assert "已有签到记录" in second
-    assert len(_rows()) == 1
+    assert original["time"] in second
+    rows = _rows()
+    assert len(rows) == 1
+    assert rows[0]["time"] == original["time"]
 
 
-def test_群名片优先于昵称(env):
-    bot = _bot(
-        {"user_id": 1, "card": "", "nickname": "小明"},
-        {"user_id": 2, "card": "小明", "nickname": "other"},
-    )
-    _run(bot, "补签 小明 2020-01-15 三班次")
-    assert _rows()[0]["user_id"] == "2"
-
-
-def test_名片为空回落昵称(env):
-    bot = _bot({"user_id": 3, "card": "", "nickname": "小明"})
-    reply = _run(bot, "补签 小明 2020-01-15 三班次")
-    assert "补签成功" in reply
-    assert _rows()[0]["user_id"] == "3"
-    assert _rows()[0]["user_name"] == "小明"
-
-
-def test_找不到成员(env):
-    reply = _run(_bot({"user_id": 1, "card": "小红"}), "补签 小明 2020-01-15 三班次")
-    assert "没找到群成员" in reply
-    assert _rows() == []
-
-
-def test_同名多人返回候选列表(env):
-    bot = _bot(
-        {"user_id": 1, "card": "小明"},
-        {"user_id": 2, "card": "小明"},
-    )
-    reply = _run(bot, "补签 小明 2020-01-15 三班次")
-    assert "QQ 1" in reply and "QQ 2" in reply
-    assert "小明#QQ" in reply
-    assert _rows() == []
-
-
-def test_重名时用QQ指定(env):
-    bot = _bot(
-        {"user_id": 1, "card": "小明"},
-        {"user_id": 2, "card": "小明"},
-    )
-    reply = _run(bot, "补签 小明#2 2020-01-15 三班次")
-    assert "补签成功" in reply
-    assert _rows()[0]["user_id"] == "2"
-
-
-def test_指定的QQ不存在(env):
-    reply = _run(_bot({"user_id": 1, "card": "小明"}), "补签 小明#999 2020-01-15 三班次")
-    assert "没找到 QQ 为 999" in reply
-    assert _rows() == []
-
-
-@pytest.mark.parametrize("result", [None, {"status": "failed"}, {"data": "oops"}])
-def test_获取成员列表失败(env, result):
-    reply = _run(FakeBot(result), "补签 小明 2020-01-15 三班次")
-    assert "获取群成员列表失败" in reply
+def test_只能给自己补签(env):
+    _run("补签 2020-01-15 三班次", name="小明", user_id="1")
+    _run("补签 2020-01-15 三班次", name="小红", user_id="2")
+    rows = _rows()
+    assert {(r["user_id"], r["user_name"]) for r in rows} == {("1", "小明"), ("2", "小红")}
 
 
 def test_随机窗口可配置且不超过班次结束(env, monkeypatch):

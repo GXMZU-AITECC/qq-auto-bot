@@ -1,11 +1,11 @@
 import asyncio
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from . import storage
 
 TIMEZONE = timedelta(hours=8)
-_MAKEUP_PAT = re.compile(r"补签\s+(?P<name>.+?)\s+(?P<date>\S+)\s+(?P<shift>\S+)\s*")
+_DATE_PAT = re.compile(r"\d{4}-\d{1,2}-\d{1,2}")
 
 
 def _extract_hours(text: str) -> int | None:
@@ -18,8 +18,16 @@ async def _checkin(bot, group_id: str, user_id: str, text: str) -> str:
     return await asyncio.to_thread(storage.checkin, group_id, user_id, user_name, _extract_hours(text))
 
 
-def _today():
+def _today() -> date:
     return (datetime.now(timezone.utc) + TIMEZONE).date()
+
+
+def _parse_date(token: str) -> date:
+    if token == "今天":
+        return _today()
+    if token == "昨天":
+        return _today() - timedelta(days=1)
+    return datetime.strptime(token, "%Y-%m-%d").date()
 
 
 def _usage() -> str:
@@ -31,89 +39,43 @@ def _usage() -> str:
             tokens.append(shift["name"])
     shift_text = " / ".join(tokens) or "一班次 / 二班次 / 三班次 / 四班次 / 晚班2 / 晚班3"
     return (
-        "补签 姓名 日期 班次\n"
-        "日期格式：YYYY-MM-DD（如 2026-10-18）\n"
-        f"班次格式：{shift_text}\n"
-        "重名时：补签 姓名#QQ 日期 班次"
+        "补签 日期 班次（只能补自己的）\n"
+        "日期：YYYY-MM-DD（如 2026-10-18）/ 今天 / 昨天，不写默认今天\n"
+        f"班次：{shift_text}\n"
+        "示例：补签 2026-10-18 三班次"
     )
 
 
-def _member_name(member: dict) -> str:
-    return str(member.get("card") or "").strip() or str(member.get("nickname") or "").strip()
-
-
-def _ambiguity(matches: list, name: str, field: str) -> str:
-    lines = [f"「{name}」匹配到 {len(matches)} 个人（{field}相同）："]
-    for i, m in enumerate(matches[:10], 1):
-        lines.append(f"{i}. {_member_name(m)}（QQ {m.get('user_id')}）")
-    if len(matches) > 10:
-        lines.append(f"……还有 {len(matches) - 10} 人")
-    lines.append(f"请改用：补签 {name}#QQ 日期 班次")
-    return "\n".join(lines)
-
-
-def _pick_member(members: list, name: str, qq: str | None = None):
-    """返回 (member, None) 或 (None, 错误提示)。"""
-    if qq:
-        for m in members:
-            if str(m.get("user_id")) == qq:
-                return m, None
-        return None, f"没找到 QQ 为 {qq} 的群成员。"
-
-    cards = [m for m in members if str(m.get("card") or "").strip() == name]
-    if len(cards) == 1:
-        return cards[0], None
-    if len(cards) > 1:
-        return None, _ambiguity(cards, name, "群名片")
-
-    nicks = [m for m in members if str(m.get("nickname") or "").strip() == name]
-    if len(nicks) == 1:
-        return nicks[0], None
-    if len(nicks) > 1:
-        return None, _ambiguity(nicks, name, "昵称")
-    return None, f"没找到群成员「{name}」，请确认群名片是否正确。"
-
-
-async def _find_member(bot, group_id: str, name: str, qq: str | None = None):
-    result = await bot._api_call("get_group_member_list", {"group_id": int(group_id)})
-    members = result.get("data") if isinstance(result, dict) else None
-    if not isinstance(members, list):
-        return None, "获取群成员列表失败，请稍后再试。"
-    members = [m for m in members if isinstance(m, dict) and m.get("user_id") is not None]
-    return _pick_member(members, name, qq)
-
-
 async def _makeup(bot, group_id: str, user_id: str, text: str) -> str:
-    m = _MAKEUP_PAT.fullmatch(text)
+    m = re.fullmatch(r"补签\s+(.+)", text.strip())
     if not m:
         return _usage()
 
-    try:
-        day = datetime.strptime(m.group("date"), "%Y-%m-%d").date()
-    except ValueError:
-        return "日期格式不对，应为 YYYY-MM-DD，如 2026-10-18。"
+    tokens = m.group(1).split()
+    if len(tokens) > 2:
+        return _usage()
+    if len(tokens) == 2:
+        day_token, shift = tokens
+        try:
+            day = _parse_date(day_token)
+        except ValueError:
+            return (
+                f"没认出日期「{day_token}」，写法：YYYY-MM-DD（如 2026-10-18）"
+                "、今天、昨天，不写则默认今天。"
+            )
+    else:
+        shift = tokens[0]
+        if _DATE_PAT.fullmatch(shift) or shift in ("今天", "昨天"):
+            return "请带上班次，如「补签 今天 三班次」。"
+        day = _today()
+
     if day > _today():
         return "不能补签未来日期。"
 
-    raw_name = m.group("name").strip().replace("＃", "#")
-    name, qq = raw_name, None
-    if "#" in raw_name:
-        base, tail = raw_name.rsplit("#", 1)
-        if tail.isdigit():
-            name, qq = base.strip(), tail
-
-    member, error = await _find_member(bot, group_id, name, qq)
-    if error:
-        return error
-
+    user_name = await bot.get_group_member_name(group_id, user_id)
     try:
         return await asyncio.to_thread(
-            storage.makeup,
-            group_id,
-            str(member["user_id"]),
-            _member_name(member),
-            day.strftime("%Y-%m-%d"),
-            m.group("shift"),
+            storage.makeup, group_id, str(user_id), user_name, day.isoformat(), shift
         )
     except ValueError as e:
         return str(e)

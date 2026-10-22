@@ -215,12 +215,19 @@ def makeup(group_id: str, user_id: str, user_name: str, day: str, period: str) -
             (group_id, user_id, user_name, day, shift["name"], credit, record_time),
         )
         if cur.rowcount == 0:
-            return f"{user_name} 在 {day} 的「{shift['name']}」已有签到记录，不重复补签。"
+            row = conn.execute(
+                "SELECT time FROM records "
+                "WHERE group_id=? AND user_id=? AND date=? AND period=?",
+                (group_id, user_id, day, shift["name"]),
+            ).fetchone()
+            when = f"（{row['time']}）" if row and row["time"] else ""
+            return f"{user_name} 在 {day} 的「{shift['name']}」已有签到记录{when}，无需补签。"
         conn.commit()
         _cleanup(conn)
         return (
-            f"补签成功：{user_name} {day} {shift['name']} "
-            f"+{_format_duration(credit)}（记录时间 {record_time}）"
+            f"补签成功：{day} {shift['name']} +{_format_duration(credit)}"
+            f"（记录时间 {record_time}）\n"
+            f"操作人：{user_name}"
         )
     finally:
         conn.close()
