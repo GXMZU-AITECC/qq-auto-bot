@@ -26,6 +26,14 @@ WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "�
 DAY_WORDS = {"今天": 0, "明天": 1, "后天": 2}
 _DIGIT2CN = {"1": "一", "2": "二", "3": "三", "4": "四"}
 
+# 明确列出的班次别名 → 班次名前缀。只认这几种写法，不做「以晚开头就算晚班」的通配，
+# 否则「请假 一班次 晚上加班」会把原因里的「晚上…」当成班次、多登记一条。
+_PERIOD_ALIASES = {
+    "晚班": "晚",
+    "晚自修": "晚",
+    "晚自习": "晚",
+}
+
 # 「今天 / 明天 / 10-20 / 2026-10-20」都认
 _DAY_PAT = r"(?:今天|明天|后天|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}-\d{1,2})"
 
@@ -74,10 +82,12 @@ def _norm_period(token: str, names: list[str]) -> str | None:
         return None
     if token in names:
         return token
-    if token.startswith("晚"):  # 晚班 / 晚自修 都认晚班
+    prefix = _PERIOD_ALIASES.get(token)  # 只认明确列出的别名
+    if prefix:
         for name in names:
-            if name.startswith("晚"):
+            if name.startswith(prefix):
                 return name
+        return None
     m = re.fullmatch(r"([1-4])班(次)?", token)  # 1班次 / 2班 → 二班次
     if m:
         for name in names:
@@ -123,12 +133,22 @@ def _parse_day(word) -> date | None:
     return None
 
 
+_BAD_DAY_TIP = "日期「{}」看起来不对，换个写法试试，比如「今天」「明天」或「10-20」。"
+
+
 def _take_day(body: str):
-    """从消息开头剥掉日期词，返回 (day|None, 剩余文本)。"""
+    """从消息开头剥掉日期词，返回 (day|None, 剩余文本, 错误文案)。
+
+    三种情况要分开：没写日期 → (None, 原文, "")；写了但根本不成立（如 13-45）
+    → (None, 剩余, 提示)，调用方应当报错而不是静默按今天登记。
+    """
     m = re.match(rf"^({_DAY_PAT})\s*", body)
     if not m:
-        return None, body
-    return _parse_day(m.group(1)), body[m.end():]
+        return None, body, ""
+    day = _parse_day(m.group(1))
+    if day is None:
+        return None, body[m.end():], _BAD_DAY_TIP.format(m.group(1))
+    return day, body[m.end():], ""
 
 
 def _take_periods(body: str, names: list[str]):
@@ -162,7 +182,9 @@ def parse_leave(text: str, cfg: dict | None = None):
     body = re.sub(r"^\s*请假\s*", "", (text or "").strip())
     # 群里习惯用顿号/逗号连写多个班次，先摊成空格再逐词解析
     body = re.sub(r"[、,，;；]+", " ", body)
-    day, body = _take_day(body)
+    day, body, err = _take_day(body)
+    if err:
+        return None, [], "", err
     periods, body = _take_periods(body, names)
 
     if not periods:
@@ -182,7 +204,7 @@ def _fmt_day(day: date) -> str:
 async def ask_leave(bot, group_id: str, user_id: str, text: str) -> str:
     """请假登记，当场回复确认。"""
     cfg = load_feature_config(CFG_NAME)
-    if not cfg.get("enabled", True):
+    if not cfg.get("enabled", False):  # 缺省关闭，与 demo / schoolcalendar 一致
         return None
 
     shift_cfg = load_feature_config("checkin")
@@ -217,19 +239,33 @@ async def ask_leave(bot, group_id: str, user_id: str, text: str) -> str:
 async def cancel_leave(bot, group_id: str, user_id: str, text: str) -> str:
     """取消请假。不带班次则取消当天全部。"""
     cfg = load_feature_config(CFG_NAME)
-    if not cfg.get("enabled", True):
+    if not cfg.get("enabled", False):  # 缺省关闭，与 demo / schoolcalendar 一致
         return None
 
     body = re.sub(r"^\s*取消请假\s*", "", (text or "").strip())
-    day, body = _take_day(body)
+    day, body, err = _take_day(body)
+    if err:
+        return err
     day = day or _today()
     day_str = day.isoformat()
 
     names = [shift["name"] for shift in shifts()]
-    periods, _ = _take_periods(body, names)
+    periods, rest = _take_periods(body, names)
+    rest = rest.strip()
 
     mine = await asyncio.to_thread(storage.list_user_by_date, group_id, user_id, day_str)
-    targets = [r for r in mine if r["period"] in periods] if periods else mine
+    if periods:
+        targets = [r for r in mine if r["period"] in periods]
+    elif rest:
+        # 写了东西但认不出班次（如打错字的「一版次」）—— 不能当成「取消全部」，
+        # 否则一句话就把当天的请假全删了。
+        return (
+            f"没认出要取消的班次：{rest}\n"
+            f"可用的班次：{'、'.join(names)}\n"
+            f"要取消当天全部请假，直接发「取消请假」，别带班次名。"
+        )
+    else:
+        targets = mine
     if not targets:
         return f"没查到你在 {_fmt_day(day)} 的请假记录。"
 
@@ -243,11 +279,16 @@ async def cancel_leave(bot, group_id: str, user_id: str, text: str) -> str:
 async def leave_list(bot, group_id: str, user_id: str, text: str) -> str:
     """查看某天的请假名单，默认今天。"""
     cfg = load_feature_config(CFG_NAME)
-    if not cfg.get("enabled", True):
+    if not cfg.get("enabled", False):  # 缺省关闭，与 demo / schoolcalendar 一致
         return None
 
     m = re.search(_DAY_PAT, re.sub(r"^\s*请假名单\s*", "", (text or "").strip()))
-    day = _parse_day(m.group(0)) if m else _today()
+    if m:
+        day = _parse_day(m.group(0))
+        if day is None:
+            return _BAD_DAY_TIP.format(m.group(0))
+    else:
+        day = _today()
     rows = await asyncio.to_thread(storage.list_by_date, group_id, day.isoformat())
 
     if not rows:
