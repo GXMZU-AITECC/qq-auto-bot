@@ -1,6 +1,6 @@
 from config import load_feature_config
 
-async def cmd_ping(bot, group_id, user_id):
+async def cmd_ping(bot, group_id, user_id,text):
     # 读取配置
     config = load_feature_config("ping")
     
