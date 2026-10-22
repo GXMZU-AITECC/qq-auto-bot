@@ -11,4 +11,4 @@ async def _demo(bot, group_id, user_id, text):
 # 指令不一定要带 /，"烤肠" 和 "/烤肠" 都能触发
 COMMANDS = {
     "烤肠": _demo,
-    }
+}
