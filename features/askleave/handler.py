@@ -170,6 +170,28 @@ def _take_periods(body: str, names: list[str]):
     return periods, body
 
 
+def usage(cfg: dict | None = None) -> str:
+    """「请假」不带参数时的用法说明。
+
+    班次列表从 configs/checkin.yaml 动态取，不在文案里写死班次名。
+    """
+    names = [shift["name"] for shift in shifts(cfg)]
+    if not names:
+        return "班次还没配好，请联系管理员检查 configs/checkin.yaml 的 checkin_shifts。"
+    aliases = "、".join(["1班次"] + sorted(_PERIOD_ALIASES))
+    首个 = names[0]  # 示例里也用配置里的班次，改了配置文案跟着变
+    return "\n".join([
+        "📋 请假怎么用",
+        f"请假 {首个} 去医院　→ 登记（日期不写默认今天）",
+        "请假名单　　　　→ 看今天谁请假",
+        f"取消请假 {首个}　→ 取消指定班次（不带班次则取消当天全部）",
+        "日期：今天 / 明天 / 后天 / 10-20 / 2026-10-20",
+        f"班次：{'、'.join(names)}",
+        f"简写：{aliases}",
+        f"例：「请假 明天 {首个} 去医院」",
+    ])
+
+
 def parse_leave(text: str, cfg: dict | None = None):
     """解析请假消息：「请假 [今天] 一班次 [二班次] [原因]」。
 
@@ -180,6 +202,8 @@ def parse_leave(text: str, cfg: dict | None = None):
         return None, [], "", "班次还没配好，请联系管理员检查 configs/checkin.yaml 的 checkin_shifts。"
 
     body = re.sub(r"^\s*请假\s*", "", (text or "").strip())
+    if not body:  # 只发「请假」是求说明，不是要报错
+        return None, [], "", usage(cfg)
     # 群里习惯用顿号/逗号连写多个班次，先摊成空格再逐词解析
     body = re.sub(r"[、,，;；]+", " ", body)
     day, body, err = _take_day(body)
