@@ -446,3 +446,49 @@ def test_配置缺省时功能关闭(monkeypatch):
     assert asyncio.run(handler.ask_leave(bot, "100", "9001", "请假 一班次")) is None
     assert asyncio.run(handler.cancel_leave(bot, "100", "9001", "取消请假")) is None
     assert asyncio.run(handler.leave_list(bot, "100", "9001", "请假名单")) is None
+
+
+# ------------------------------------------------------------ 用法提示
+
+def test_只发请假给用法说明而不是报错():
+    """只发「请假」是求说明，不该落到「没认出班次」的报错里。"""
+    回复 = asyncio.run(handler.ask_leave(FakeBot(), "100", "9001", "请假"))
+    assert "请假怎么用" in 回复
+    assert "没认出班次" not in 回复
+
+
+def test_用法说明里的班次来自配置不写死(monkeypatch):
+    改过的 = {
+        "checkin_shifts": [
+            {"name": "早读", "arrive": "07:00", "leave": "07:30", "duration_hours": 1},
+            {"name": "午练", "arrive": "12:30", "leave": "13:00", "duration_hours": 1},
+        ]
+    }
+
+    def fake_cfg(name):
+        return {"checkin": 改过的, "askleave": ASKLEAVE_CFG}.get(name, {})
+
+    monkeypatch.setattr(handler, "load_feature_config", fake_cfg)
+    回复 = asyncio.run(handler.ask_leave(FakeBot(), "100", "9001", "请假"))
+    assert "早读、午练" in 回复
+    assert "一班次" not in 回复  # 旧配置的班次名不该出现
+
+
+def test_用法说明带上三个命令和日期写法():
+    回复 = asyncio.run(handler.ask_leave(FakeBot(), "100", "9001", "请假"))
+    for 关键字 in ["请假名单", "取消请假", "今天", "明天", "后天", "10-20"]:
+        assert 关键字 in 回复
+
+
+def test_只发请假不落库():
+    今天 = handler._today().isoformat()
+    asyncio.run(handler.ask_leave(FakeBot(), "100", "9001", "请假"))
+    assert storage.list_by_date("100", 今天) == []
+
+
+def test_取消请假单发仍是取消动作不是用法说明(monkeypatch):
+    """「取消请假」单发是有意义的动作，不能被用法提示吞掉。"""
+    asyncio.run(handler.ask_leave(FakeBot(), "100", "9001", "请假 一班次 有事"))
+    回复 = asyncio.run(handler.cancel_leave(FakeBot(), "100", "9001", "取消请假"))
+    assert "已取消" in 回复
+    assert "请假怎么用" not in 回复
