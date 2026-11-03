@@ -100,3 +100,7 @@ COMMANDS = {
 COMMAND_PATTERNS = {
     r"^/抽卡\s+.*$": cmd_draw,
 }
+
+PATTERN_HELP = {
+    r"^/抽卡\s+.*$": "/抽卡 十连",
+}

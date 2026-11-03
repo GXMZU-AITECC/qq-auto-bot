@@ -105,3 +105,7 @@ COMMAND_PATTERNS = {
     r"^/时间\s+.*$": cmd_time,
     r"^/倒计时\s+.*$": cmd_countdown,
 }
+PATTERN_HELP = {
+    r"^/时间\s+.*$": "/时间 [北京|UTC|东京|纽约|伦敦]",
+    r"^/倒计时\s+.*$": "/倒计时 YYYY-MM-DD",
+}

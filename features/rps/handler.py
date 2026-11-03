@@ -48,3 +48,7 @@ async def cmd_rps(bot, group_id, user_id, text):
 COMMAND_PATTERNS = {
     r"^/猜拳(?:\s+.*)?$": cmd_rps,
 }
+
+PATTERN_HELP = {
+    r"^/猜拳(?:\s+.*)?$": "/猜拳 石头|剪刀|布",
+}
