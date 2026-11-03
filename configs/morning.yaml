@@ -1,0 +1,2 @@
+# 早安模糊触发：true 启用（发以「早安」开头的消息就回问候），false 关闭
+enabled: true

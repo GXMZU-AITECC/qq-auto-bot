@@ -75,6 +75,18 @@ class OneBotClient:
             return info.get("card") or info.get("nickname") or str(user_id)
         return str(user_id)
 
+    async def api_call(self, action: str, params: dict | None = None) -> dict | None:
+        """功能层直调 LLOneBot 接口的统一入口。
+
+        这里还没有专门封装的动作走这里（如 api_call("get_status")），
+        不要直接调 _api_call：后者是内部实现，签名和返回值不保证稳定。
+        """
+        return await self._api_call(action, params or {})
+
+    async def get_login_info(self) -> dict | None:
+        """获取机器人自身账号信息；也常用来测一次 API 往返延迟。"""
+        return await self._api_call("get_login_info", {})
+
     async def _api_call(self, action: str, params: dict) -> dict | None:
         url = f"{self.http_url}/{action}"
         try:

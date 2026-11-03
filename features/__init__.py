@@ -1,4 +1,4 @@
-"""功能模块自动发现与命令路由。
+r"""功能模块自动发现与命令路由。
 
 规范：
 - features/ 下每个子包就是一个功能模块
@@ -11,6 +11,8 @@
 - 可选导出 POKE_HANDLERS 列表（戳一戳处理器）
 - POKE_HANDLERS = [async_handler, ...]
 - poke handler 签名: async def handler(bot, group_id, user_id, target_id) -> str | None
+- 可选导出 PATTERN_HELP 字典（正则 → 给人看的写法，仅影响 /help 展示）
+- PATTERN_HELP = {r"^/ping(?:\s+(.*))?$": "/ping [次数]", ...}
 
 内置命令:
 - /help 列出所有已注册的命令（精确命令 + 正则命令），无需自己实现，且不可被功能覆盖。
@@ -26,24 +28,32 @@ logger = logging.getLogger("features")
 
 _commands: dict[str, Callable] = {}
 _patterns: list[tuple[re.Pattern, Callable]] = []
+_pattern_help: dict[str, str] = {}  # 正则字符串 → /help 里给人看的写法
 _poke_handlers: list[Callable] = []
 
 HELP_CMD = "/help"  # 内置命令，保留名，功能不可覆盖
 
 
 def _help_text() -> str:
-    """汇总所有已注册命令，供内置 /help 使用"""
+    """汇总所有已注册命令，供内置 /help 使用
+
+    正则命令优先显示 HANDLER 里 PATTERN_HELP 给的友好写法；
+    没给的时候退回裸正则，方便开发者发现漏写说明的地方。
+    """
     lines = ["📖 可用命令：", f"  {HELP_CMD}  —— 显示本列表"]
     lines += [f"  {cmd}" for cmd in sorted(_commands)]
-    lines += [f"  {p.pattern}  ——（正则匹配）" for p, _ in _patterns]
+    for compiled, _ in _patterns:
+        label = _pattern_help.get(compiled.pattern, compiled.pattern)
+        lines.append(f"  {label}  ——（正则匹配）")
     return "\n".join(lines)
 
 
 def discover():
     """扫描 features/ 下所有模块，收集 COMMANDS、COMMAND_PATTERNS 与 POKE_HANDLERS"""
-    global _commands, _patterns, _poke_handlers
+    global _commands, _patterns, _pattern_help, _poke_handlers
     _commands.clear()
     _patterns.clear()
+    _pattern_help.clear()
     _poke_handlers.clear()
 
     for _, name, ispkg in pkgutil.iter_modules(__path__):
@@ -59,6 +69,7 @@ def discover():
                     logger.warning(f"命令 {cmd} 被多个功能注册，后面的覆盖前面的")
                 _commands[cmd] = handler
                 logger.info(f"注册命令 [{cmd}] ← features/{name}")
+            pattern_help = getattr(mod, "PATTERN_HELP", {})
             for pat, handler in getattr(mod, "COMMAND_PATTERNS", {}).items():
                 try:
                     compiled = re.compile(pat)
@@ -66,6 +77,10 @@ def discover():
                     logger.error(f"features/{name} 正则无效 {pat!r}: {e}")
                     continue
                 _patterns.append((compiled, handler))
+                if pat in pattern_help:
+                    _pattern_help[pat] = pattern_help[pat]
+                else:
+                    logger.info(f"features/{name} 的正则 {pat!r} 没写 PATTERN_HELP，/help 会显示裸正则")
                 logger.info(f"注册正则命令 [{pat}] ← features/{name}")
             for handler in getattr(mod, "POKE_HANDLERS", []):
                 _poke_handlers.append(handler)
