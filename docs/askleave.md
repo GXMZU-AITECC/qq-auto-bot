@@ -68,7 +68,7 @@
 
 | 配置项 | 默认 | 说明 |
 |--------|------|------|
-| `enabled` | `false`（缺省） | 显式写 `true` 才启用；配置缺失时不启用，与 demo / schoolcalendar 保持一致 |
+| `enabled` | 关闭（未写该行时） | 必须显式写 `true` 才启用：配置缺失、或把该行删掉，都按关闭处理（与 demo / schoolcalendar 保持一致）。本仓库的 `configs/askleave.yaml` 示例已设为 `true`，开箱即用 |
 | `notify_before_minutes` | `30` | 提前多少分钟提醒；写成非数字时回落 30 |
 
 ## 数据
