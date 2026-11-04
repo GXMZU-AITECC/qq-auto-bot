@@ -15,9 +15,12 @@
   - 状态流转：已认领 →（该认领人开了 PR）进行中 →（该 PR 合并）已完成；
     PR 关闭且未合并则退回「已认领」。计时从认领那刻起算，进行中不停表。
   - PR 一律指「该认领人开的、目标分支为 sandbox 的 PR」；别的分支的 PR 不算进度。
-  - 第 5 天还没开 PR → 预警一次；第 7 天还没开 PR → 释放。
-  - 「已完成」只贴标签、摘掉「认领任务」，不关 issue。
-  - 只有「认领回复」「第 5 天预警」「第 7 天释放」三处发评论，其余流转静默改标签。
+  - 截止时间取 issue 正文可见行 `截止：YYYY-MM-DD`（当日 23:59 北京时间）；
+    没写这一行则退回认领后 7 天。截止前 2 天提醒一次，到期仍无 PR 才释放；
+    已有 PR（进行中）不释放，但照常提醒。
+  - 「/cancel」只在「已认领」状态、只有认领人本人可用；进行中需先关闭 PR。
+  - PR 合并后：贴「已完成」、摘掉「认领任务」等标签，并关闭 issue（completed）。
+  - 只有认领、取消、提前提醒、到期释放四处发评论，其余流转静默改标签。
 """
 
 import json
@@ -26,7 +29,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 TOKEN = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
@@ -40,9 +43,12 @@ DONE_LABEL = "已完成"
 WARNED_LABEL = "已预警"
 ACTIVE_LABELS = (CLAIMED_LABEL, DOING_LABEL)   # 占用中，一人一条的判定依据
 CMD = "/receive"
+CANCEL_CMD = "/cancel"
 BASE_BRANCH = "sandbox"      # PR 事件只认进 sandbox 的
-LIMIT_DAYS = 7
-WARN_DAYS = 5
+LIMIT_DAYS = 7               # 正文没写「截止」时：认领后 7 天截止
+REMIND_DAYS_BEFORE = 2       # 截止前 2 天提醒一次
+BEIJING = timezone(timedelta(hours=8))
+DEADLINE_RE = re.compile(r"^\s*截止[：:]\s*(\d{4}-\d{2}-\d{2})\s*$", re.MULTILINE)
 ALLOWED_ASSOC = {"MEMBER", "OWNER", "COLLABORATOR"}
 
 
@@ -151,12 +157,13 @@ def set_state(number: int, want: str | None, labels: list[str]) -> None:
 
 
 def finish(number: int, labels: list[str]) -> None:
-    """完成：贴「已完成」，摘掉其余标签（含「认领任务」，从此不再可领）。"""
+    """完成：贴「已完成」，摘掉其余标签（含「认领任务」），并关闭 issue。"""
     if DONE_LABEL not in labels:
         add_label(number, DONE_LABEL)
     for name in (CLAIMED_LABEL, DOING_LABEL, WARNED_LABEL, TASK_LABEL):
         if name in labels:
             remove_label(number, name)
+    api("PATCH", _issue_path(number), {"state": "closed", "state_reason": "completed"})
 
 
 def claim_time(number: int) -> str | None:
@@ -168,11 +175,32 @@ def claim_time(number: int) -> str | None:
     return t
 
 
-def days_since(iso: str | None) -> float | None:
-    if not iso:
+def parse_deadline(body: str | None) -> datetime | None:
+    """issue 正文可见行 `截止：YYYY-MM-DD`，取当日 23:59（北京时间）。"""
+    m = DEADLINE_RE.search(body or "")
+    if not m:
         return None
-    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    return (datetime.now(timezone.utc) - dt).total_seconds() / 86400
+    try:
+        day = datetime.strptime(m.group(1), "%Y-%m-%d")
+    except ValueError:
+        return None
+    return day.replace(hour=23, minute=59, tzinfo=BEIJING)
+
+
+def deadline_of(issue: dict) -> datetime | None:
+    """截止时间：正文写了就用；没写则按认领时间 + LIMIT_DAYS。"""
+    deadline = parse_deadline(issue.get("body"))
+    if deadline:
+        return deadline
+    claimed = claim_time(issue["number"])
+    if not claimed:
+        return None
+    start = datetime.fromisoformat(claimed.replace("Z", "+00:00"))
+    return start.astimezone(BEIJING) + timedelta(days=LIMIT_DAYS)
+
+
+def deadline_text(dt: datetime) -> str:
+    return dt.astimezone(BEIJING).strftime("%Y-%m-%d %H:%M（北京时间）")
 
 
 def other_claims(login: str, exclude: int) -> list[int]:
@@ -205,12 +233,31 @@ def do_claim() -> None:
         return  # 不归管家管的 issue，静默忽略
 
     body = (ev["comment"].get("body") or "").strip()
-    if not body.startswith(CMD):
-        return
+    command = body.split(maxsplit=1)[0] if body else ""
 
     commenter = ev["comment"]["user"]["login"]
     assoc = ev["comment"].get("author_association", "")
     assignees = [a["login"] for a in issue.get("assignees", [])]
+    labels = event_labels(issue)
+
+    if command == CANCEL_CMD:
+        if not assignees or assignees[0] != commenter:
+            return  # 非认领人执行无效
+        if DOING_LABEL in labels:
+            comment(
+                number,
+                f"@{commenter} 你有进行中的 PR，先关闭该 PR（关闭后会退回「已认领」）"
+                f"才能取消认领。",
+            )
+            return
+        unassign(number, commenter)
+        for name in (CLAIMED_LABEL, DOING_LABEL, WARNED_LABEL):
+            remove_label(number, name)
+        comment(number, f"↩️ @{commenter} 已取消认领，本任务恢复可认领。")
+        return
+
+    if command != CMD:
+        return
 
     if assignees and assignees[0] == commenter:
         comment(number, f"@{commenter} 你已经认领了这条，直接开工即可 👍")
@@ -229,13 +276,21 @@ def do_claim() -> None:
 
     assign(number, commenter)
     add_label(number, CLAIMED_LABEL)
+    deadline = parse_deadline(issue.get("body"))
+    if deadline:
+        deadline_line = f"截止时间：{deadline_text(deadline)}"
+    else:
+        fallback = datetime.now(BEIJING) + timedelta(days=LIMIT_DAYS)
+        deadline_line = f"截止时间：{deadline_text(fallback)}（未写「截止」行，按认领后 {LIMIT_DAYS} 天）"
     comment(
         number,
         f"✅ @{commenter} 认领成功！\n\n"
+        f"- {deadline_line}\n"
+        f"- 截止前 {REMIND_DAYS_BEFORE} 天会提醒一次；到期仍无 PR 则自动释放\n"
+        f"- 还没开 PR 时想退出，可回复 `{CANCEL_CMD}`\n"
         f"- 从 `{BASE_BRANCH}` 新建分支开发，向 `{BASE_BRANCH}` 提 PR，"
         f"PR 描述里写上 `#{number}`（机器人靠它认关联）\n"
-        f"- 第 {WARN_DAYS} 天还没开 PR 会提醒一次；第 {LIMIT_DAYS} 天仍无 PR 则自动释放\n"
-        f"- PR 合并后机器人会标记「已完成」，你就可以接下一条",
+        f"- PR 合并后机器人会关闭本 issue 并标记「已完成」，你就可以接下一条",
     )
 
 
@@ -272,8 +327,6 @@ def do_pr() -> None:
                 set_state(number, CLAIMED_LABEL, ls)  # 退回「已认领」，继续计时
         else:
             set_state(number, DOING_LABEL, ls)
-            if WARNED_LABEL in ls:
-                remove_label(number, WARNED_LABEL)
 
 
 def do_sweep() -> None:
@@ -296,33 +349,35 @@ def do_sweep() -> None:
         if state == "merged":
             finish(number, ls)
             continue
+
         if state == "open":
-            set_state(number, DOING_LABEL, ls)
-            if WARNED_LABEL in ls:
-                remove_label(number, WARNED_LABEL)
+            set_state(number, DOING_LABEL, ls)   # 已有 PR：不释放，但仍然提醒
+        else:
+            set_state(number, CLAIMED_LABEL, ls)  # 退回「已认领」，继续计时
+
+        deadline = deadline_of(issue)
+        if deadline is None:
             continue
+        now = datetime.now(timezone.utc)
 
-        # 没有该认领人的 PR：回到「已认领」，继续计时
-        set_state(number, CLAIMED_LABEL, ls)
-
-        age = days_since(claim_time(number))
-        if age is None:
-            continue
-
-        if age >= LIMIT_DAYS:
+        if now >= deadline:
+            if state == "open":
+                continue  # 已有 PR 进行中，等它合并或关闭，不释放
             unassign(number, who)
             remove_label(number, CLAIMED_LABEL)
             remove_label(number, DOING_LABEL)
             remove_label(number, WARNED_LABEL)
             comment(
                 number,
-                f"⏰ @{who} 认领已超过 {LIMIT_DAYS} 天且没有 PR，本任务自动释放，欢迎重新认领。",
+                f"⏰ @{who} 任务已到截止时间 {deadline_text(deadline)} 仍没有可计入的 PR，"
+                f"本任务自动释放，欢迎重新认领。",
             )
-        elif age >= WARN_DAYS and WARNED_LABEL not in ls:
+        elif now >= deadline - timedelta(days=REMIND_DAYS_BEFORE) and WARNED_LABEL not in ls:
             add_label(number, WARNED_LABEL)
             comment(
                 number,
-                f"⚠️ @{who} 认领已 {int(age)} 天，还没看到 PR。第 {LIMIT_DAYS} 天会自动释放，加油！",
+                f"⚠️ @{who} 任务将在 {deadline_text(deadline)} 截止（还剩不到 "
+                f"{REMIND_DAYS_BEFORE} 天），请抓紧完成并合并 PR；本条提醒只发一次。",
             )
 
 
